@@ -43,6 +43,9 @@
       appId: "1:741090437669:web:cf076250d558ff48996dcc"
     };
     
+    // 💡 과거의 잘못된 테스트 기억을 모두 지우고 완전히 새로운 데이터베이스 이름으로 교체!
+    const DOC_ID = 'sangjeong_v2';
+
     // 미리보기(Canvas) 환경과 실제 배포 환경을 구분하여 오류를 방지합니다.
     const isCanvas = typeof __firebase_config !== 'undefined';
     const firebaseConfig = isCanvas ? JSON.parse(__firebase_config) : myFirebaseConfig;
@@ -369,8 +372,8 @@
       const [passwordInput, setPasswordInput] = useState("");
       const [newPasswordInput, setNewPasswordInput] = useState("");
       const [alertMsg, setAlertMsg] = useState("");
-      const [loginError, setLoginError] = useState(""); // 팝업 대신 버튼 위에 직접 띄울 에러 상태
-      const [isLoggingIn, setIsLoggingIn] = useState(false); // 로딩 중 상태 확인
+      const [loginError, setLoginError] = useState(""); 
+      const [isLoggingIn, setIsLoggingIn] = useState(false); 
       
       const [selectedExam, setSelectedExam] = useState(exams[0]);
       const [selectedStudentForTeacher, setSelectedStudentForTeacher] = useState(students[0]);
@@ -401,7 +404,7 @@
 
       useEffect(() => {
         if (!user) return;
-        const docRef = doc(db, 'artifacts', appId, 'public', 'data', 'class_data', 'main');
+        const docRef = doc(db, 'artifacts', appId, 'public', 'data', 'class_data', DOC_ID);
         
         const unsubscribe = onSnapshot(docRef, (snap) => {
           if (snap.exists()) {
@@ -500,13 +503,13 @@
                     {!(docData && docData.teacherPwd) ? (
                       <>
                         <p className="text-sm text-blue-600 text-center font-bold">최초 접속입니다. 관리자 비밀번호를 설정해주세요.</p>
-                        <input type="password" value={newPasswordInput} onChange={handleNewPasswordChange} placeholder="새 비밀번호 입력" className="w-full p-3 border rounded-lg focus:ring-2 focus:ring-blue-500 outline-none" />
+                        <input type="password" value={newPasswordInput} onChange={(e) => { setNewPasswordInput(e.target.value); setLoginError(""); }} placeholder="새 비밀번호 입력" className="w-full p-3 border rounded-lg focus:ring-2 focus:ring-blue-500 outline-none" />
                         {/* 직접 보이는 에러 메시지 추가 */}
                         {loginError && <p className="text-red-500 font-bold text-sm text-center animate-pulse">{loginError}</p>}
                       </>
                     ) : (
                       <>
-                        <input type="password" value={passwordInput} onChange={handlePasswordChange} onKeyDown={(e) => e.key === 'Enter' && handleTeacherLogin()} placeholder="비밀번호 입력" className="w-full p-3 border rounded-lg focus:ring-2 focus:ring-emerald-500 outline-none" />
+                        <input type="password" value={passwordInput} onChange={(e) => { setPasswordInput(e.target.value); setLoginError(""); }} onKeyDown={(e) => e.key === 'Enter' && handleTeacherLogin()} placeholder="비밀번호 입력" className="w-full p-3 border rounded-lg focus:ring-2 focus:ring-emerald-500 outline-none" />
                         {loginError && <p className="text-red-500 font-bold text-sm text-center animate-pulse">{loginError}</p>}
                       </>
                     )}
@@ -515,6 +518,11 @@
                       {isLoggingIn ? '확인 중...' : '로그인'}
                     </button>
                     <button type="button" onClick={() => { setLoginMode(null); setLoginError(""); }} className="w-full py-2 text-gray-500 text-sm font-semibold">돌아가기</button>
+                    
+                    {/* 선생님용 강력한 초기화 버튼 (비밀번호를 잊었을 때 대비) */}
+                    {(docData && docData.teacherPwd) && (
+                      <button type="button" onClick={handleResetTeacherPwd} className="w-full py-2 text-red-400 text-xs font-semibold underline mt-2">비밀번호를 잊으셨나요? (초기화)</button>
+                    )}
                   </div>
                 )}
                 {loginMode === 'student' && (
@@ -617,7 +625,7 @@
               setIsLoggingIn(false);
               return;
             }
-            const docRef = doc(db, 'artifacts', appId, 'public', 'data', 'class_data', 'main');
+            const docRef = doc(db, 'artifacts', appId, 'public', 'data', 'class_data', DOC_ID);
             await updateDoc(docRef, { teacherPwd: newPasswordInput });
             setCurrentUserRole('teacher');
             setLoginMode(null);
@@ -654,7 +662,7 @@
               setIsLoggingIn(false);
               return;
             }
-            const docRef = doc(db, 'artifacts', appId, 'public', 'data', 'class_data', 'main');
+            const docRef = doc(db, 'artifacts', appId, 'public', 'data', 'class_data', DOC_ID);
             await updateDoc(docRef, { [`students.${currentUserName}.pwd`]: newPasswordInput });
             setCurrentUserRole('student');
             setLoginMode(null);
@@ -684,12 +692,32 @@
           onConfirm: async (newPwd) => {
             if (newPwd) {
               try {
-                const docRef = doc(db, 'artifacts', appId, 'public', 'data', 'class_data', 'main');
+                const docRef = doc(db, 'artifacts', appId, 'public', 'data', 'class_data', DOC_ID);
                 await updateDoc(docRef, { teacherPwd: newPwd });
                 showAlert("관리자 비밀번호가 성공적으로 변경되었습니다.");
               } catch(e) {
                 showAlert("변경 오류: " + e.message);
               }
+            }
+            setModalConfig(null);
+          },
+          onCancel: () => setModalConfig(null)
+        });
+      };
+      
+      const handleResetTeacherPwd = () => {
+        setModalConfig({
+          type: 'confirm',
+          title: '관리자 비밀번호 초기화',
+          message: '관리자 비밀번호를 완전히 초기화하시겠습니까? (초기화 후 처음부터 다시 설정해야 합니다.)',
+          onConfirm: async () => {
+            try {
+              const docRef = doc(db, 'artifacts', appId, 'public', 'data', 'class_data', DOC_ID);
+              await updateDoc(docRef, { teacherPwd: null });
+              showAlert("관리자 비밀번호가 초기화되었습니다. 처음부터 다시 설정하세요.");
+              setLoginMode(null);
+            } catch(e) {
+              showAlert("초기화 오류: " + e.message);
             }
             setModalConfig(null);
           },
@@ -704,7 +732,7 @@
           message: `${selectedStudentForTeacher} 학생의 비밀번호를 '0000'으로 초기화하시겠습니까?`,
           onConfirm: async () => {
             try {
-              const docRef = doc(db, 'artifacts', appId, 'public', 'data', 'class_data', 'main');
+              const docRef = doc(db, 'artifacts', appId, 'public', 'data', 'class_data', DOC_ID);
               await updateDoc(docRef, { [`students.${selectedStudentForTeacher}.pwd`]: "0000" });
               showAlert("비밀번호가 '0000'으로 초기화되었습니다.");
             } catch(e) {
@@ -718,7 +746,7 @@
 
       const updateStudentData = async (studentName, exam, field, value) => {
         if (!docData || !docData.students || !docData.students[studentName]) return;
-        const docRef = doc(db, 'artifacts', appId, 'public', 'data', 'class_data', 'main');
+        const docRef = doc(db, 'artifacts', appId, 'public', 'data', 'class_data', DOC_ID);
         await updateDoc(docRef, { [`students.${studentName}.exams.${exam}.${field}`]: value });
       };
 
@@ -825,7 +853,7 @@
             }
 
             if (Object.keys(updates).length > 0) {
-              const docRef = doc(db, 'artifacts', appId, 'public', 'data', 'class_data', 'main');
+              const docRef = doc(db, 'artifacts', appId, 'public', 'data', 'class_data', DOC_ID);
               await updateDoc(docRef, updates);
               showAlert(`${Object.keys(updates).length}명 학생의 성적이 성공적으로 자동 등록되었습니다!`);
             } else {
