@@ -473,14 +473,14 @@
               <div className="p-8">
                 {!loginMode && (
                   <div className="space-y-4">
-                    <button onClick={() => setLoginMode('student')} className="w-full py-4 bg-emerald-50 hover:bg-emerald-100 text-emerald-800 rounded-xl font-bold flex items-center justify-center gap-2"><User className="w-6 h-6"/> 학생 접속</button>
-                    <button onClick={() => setLoginMode('teacher')} className="w-full py-4 bg-blue-50 hover:bg-blue-100 text-blue-800 rounded-xl font-bold flex items-center justify-center gap-2"><Users className="w-6 h-6"/> 관리자 접속</button>
+                    <button type="button" onClick={() => setLoginMode('student')} className="w-full py-4 bg-emerald-50 hover:bg-emerald-100 text-emerald-800 rounded-xl font-bold flex items-center justify-center gap-2"><User className="w-6 h-6"/> 학생 접속</button>
+                    <button type="button" onClick={() => setLoginMode('teacher')} className="w-full py-4 bg-blue-50 hover:bg-blue-100 text-blue-800 rounded-xl font-bold flex items-center justify-center gap-2"><Users className="w-6 h-6"/> 관리자 접속</button>
                   </div>
                 )}
                 {loginMode === 'teacher' && (
                   <div className="space-y-5">
                     <h2 className="text-xl font-bold text-center text-gray-800 flex items-center justify-center gap-2"><Lock className="w-5 h-5"/> 관리자 로그인</h2>
-                    {!docData?.teacherPwd ? (
+                    {!(docData && docData.teacherPwd) ? (
                       <>
                         <p className="text-sm text-blue-600 text-center font-bold">최초 접속입니다. 관리자 비밀번호를 설정해주세요.</p>
                         <input type="password" value={newPasswordInput} onChange={(e) => setNewPasswordInput(e.target.value)} placeholder="새 비밀번호 입력" className="w-full p-3 border rounded-lg focus:ring-2 focus:ring-blue-500 outline-none" />
@@ -488,8 +488,8 @@
                     ) : (
                       <input type="password" value={passwordInput} onChange={(e) => setPasswordInput(e.target.value)} onKeyDown={(e) => e.key === 'Enter' && handleTeacherLogin()} placeholder="비밀번호 입력" className="w-full p-3 border rounded-lg focus:ring-2 focus:ring-emerald-500 outline-none" />
                     )}
-                    <button onClick={handleTeacherLogin} className="w-full py-3 bg-emerald-600 text-white rounded-lg font-bold hover:bg-emerald-700 transition">로그인</button>
-                    <button onClick={() => setLoginMode(null)} className="w-full py-2 text-gray-500 text-sm font-semibold">돌아가기</button>
+                    <button type="button" onClick={handleTeacherLogin} className="w-full py-3 bg-emerald-600 text-white rounded-lg font-bold hover:bg-emerald-700 transition">로그인</button>
+                    <button type="button" onClick={() => setLoginMode(null)} className="w-full py-2 text-gray-500 text-sm font-semibold">돌아가기</button>
                   </div>
                 )}
                 {loginMode === 'student' && (
@@ -499,20 +499,20 @@
                       <option value="">이름을 선택하세요</option>
                       {students.map(s => <option key={s} value={s}>{s}</option>)}
                     </select>
-                    {currentUserName && !docData?.students?.[currentUserName]?.pwd && (
+                    {currentUserName && !(docData && docData.students && docData.students[currentUserName] && docData.students[currentUserName].pwd) && (
                       <div className="p-4 bg-yellow-50 rounded-lg border border-yellow-200">
                         <p className="text-sm text-yellow-800 font-semibold mb-3">최초 접속입니다. 잊지 않을 <span className="text-red-500">숫자 4자리</span>로 비밀번호를 설정하세요. <br/><span className="text-xs text-yellow-600 mt-1 inline-block">(다음 로그인 시 필요하니 꼭 기억하세요!)</span></p>
                         <input type="password" maxLength="4" value={newPasswordInput} onChange={(e) => setNewPasswordInput(e.target.value.replace(/[^0-9]/g, ''))} placeholder="숫자 4자리 입력" className="w-full p-3 border border-yellow-300 rounded-lg outline-none mb-3 font-bold tracking-widest text-center text-lg" />
-                        <button onClick={handleStudentLogin} className="w-full py-3 bg-yellow-500 text-white rounded-lg font-bold hover:bg-yellow-600 transition">비밀번호 설정 및 시작</button>
+                        <button type="button" onClick={handleStudentLogin} className="w-full py-3 bg-yellow-500 text-white rounded-lg font-bold hover:bg-yellow-600 transition">비밀번호 설정 및 시작</button>
                       </div>
                     )}
-                    {currentUserName && docData?.students?.[currentUserName]?.pwd && (
+                    {currentUserName && (docData && docData.students && docData.students[currentUserName] && docData.students[currentUserName].pwd) && (
                       <>
                         <input type="password" value={passwordInput} onChange={(e) => setPasswordInput(e.target.value)} onKeyDown={(e) => e.key === 'Enter' && handleStudentLogin()} placeholder="비밀번호 입력" className="w-full p-3 border rounded-lg outline-none text-center tracking-widest text-lg" />
-                        <button onClick={handleStudentLogin} className="w-full py-3 bg-emerald-600 text-white rounded-lg font-bold">로그인</button>
+                        <button type="button" onClick={handleStudentLogin} className="w-full py-3 bg-emerald-600 text-white rounded-lg font-bold">로그인</button>
                       </>
                     )}
-                    <button onClick={() => setLoginMode(null)} className="w-full py-2 text-gray-500 text-sm font-semibold">돌아가기</button>
+                    <button type="button" onClick={() => setLoginMode(null)} className="w-full py-2 text-gray-500 text-sm font-semibold">돌아가기</button>
                   </div>
                 )}
               </div>
@@ -523,12 +523,12 @@
 
       // --- DASHBOARD ---
       const activeStudent = currentUserRole === 'teacher' ? selectedStudentForTeacher : currentUserName;
-      const activeStudentData = docData?.students?.[activeStudent]?.exams?.[selectedExam];
+      const activeStudentData = docData && docData.students && docData.students[activeStudent] && docData.students[activeStudent].exams ? docData.students[activeStudent].exams[selectedExam] : null;
       
       const isSem2 = selectedExam.includes("2학기");
       const currentFixedSubjects = isSem2 ? FIXED_SUBJECTS_SEM2 : FIXED_SUBJECTS_SEM1;
 
-      const activeSubjects = activeStudentData?.subjects || [];
+      const activeSubjects = activeStudentData && activeStudentData.subjects ? activeStudentData.subjects : [];
       const mergedSubjects = currentFixedSubjects.map((fixedSub, idx) => {
         const existing = activeSubjects.find(s => s.name === fixedSub.name);
         return {
@@ -547,7 +547,7 @@
         };
       });
 
-      const activeResolution = activeStudentData?.resolution || "";
+      const activeResolution = activeStudentData && activeStudentData.resolution ? activeStudentData.resolution : "";
 
       const isSemesterFinal = selectedExam.includes("학기말");
       const isFirstExam = selectedExam.includes("1차시험");
@@ -575,7 +575,7 @@
 
       const handleTeacherLogin = async () => {
         try {
-          if (!docData?.teacherPwd) {
+          if (!docData || !docData.teacherPwd) {
             if (!newPasswordInput) return showAlert("새로운 비밀번호를 입력해주세요.");
             const docRef = doc(db, 'artifacts', appId, 'public', 'data', 'class_data', 'main');
             await updateDoc(docRef, { teacherPwd: newPasswordInput });
@@ -641,7 +641,7 @@
       const handleStudentLogin = async () => {
         try {
           if (!currentUserName) return showAlert("이름을 선택해주세요.");
-          const studentData = docData?.students?.[currentUserName] || {};
+          const studentData = (docData && docData.students && docData.students[currentUserName]) ? docData.students[currentUserName] : {};
           
           if (!studentData.pwd) {
             if (!/^\d{4}$/.test(newPasswordInput)) return showAlert("비밀번호는 반드시 숫자 4자리로 입력해주세요.");
@@ -666,14 +666,14 @@
       };
 
       const updateStudentData = async (studentName, exam, field, value) => {
-        if (!docData || !docData.students?.[studentName]) return;
+        if (!docData || !docData.students || !docData.students[studentName]) return;
         const docRef = doc(db, 'artifacts', appId, 'public', 'data', 'class_data', 'main');
         await updateDoc(docRef, { [`students.${studentName}.exams.${exam}.${field}`]: value });
       };
 
       const handleSubjectChange = (subjectName, field, value) => {
         const activeStudent = currentUserRole === 'teacher' ? selectedStudentForTeacher : currentUserName;
-        const currentSubjects = [...(docData?.students?.[activeStudent]?.exams?.[selectedExam]?.subjects || [])];
+        const currentSubjects = [...((docData && docData.students && docData.students[activeStudent] && docData.students[activeStudent].exams && docData.students[activeStudent].exams[selectedExam] && docData.students[activeStudent].exams[selectedExam].subjects) || [])];
         
         const isSem2 = selectedExam.includes("2학기");
         const currentFixedSubjects = isSem2 ? FIXED_SUBJECTS_SEM2 : FIXED_SUBJECTS_SEM1;
@@ -727,7 +727,7 @@
               const studentName = row[0] ? String(row[0]).trim() : "";
               
               if (students.includes(studentName)) {
-                const existingSubjects = docData?.students?.[studentName]?.exams?.[selectedExam]?.subjects || [];
+                const existingSubjects = (docData && docData.students && docData.students[studentName] && docData.students[studentName].exams && docData.students[studentName].exams[selectedExam] && docData.students[studentName].exams[selectedExam].subjects) || [];
                 let newSubjectsMap = new Map();
                 existingSubjects.forEach(s => newSubjectsMap.set(s.name, { ...s }));
                 
@@ -786,7 +786,7 @@
           }
         };
         reader.readAsBinaryString(file);
-        if(fileInputRef.current) fileInputRef.current.value = '';
+        if (fileInputRef.current) fileInputRef.current.value = '';
       };
 
       const handleDownloadImage = () => {
@@ -840,8 +840,8 @@
                   />
                 )}
                 <div className="flex justify-end gap-3">
-                  <button onClick={modalConfig.onCancel} className="px-5 py-2 text-gray-600 font-bold hover:bg-gray-100 rounded-lg transition">취소</button>
-                  <button onClick={() => {
+                  <button type="button" onClick={modalConfig.onCancel} className="px-5 py-2 text-gray-600 font-bold hover:bg-gray-100 rounded-lg transition">취소</button>
+                  <button type="button" onClick={() => {
                     if (modalConfig.type === 'prompt') {
                       modalConfig.onConfirm(document.getElementById('modalPromptInput').value);
                     } else {
@@ -864,9 +864,9 @@
                 </div>
                 <div className="flex gap-4 items-center">
                   {currentUserRole === 'teacher' && (
-                    <button onClick={handleTeacherPwdChange} className="text-sm font-semibold text-gray-500 hover:text-blue-600 flex items-center gap-1"><Settings className="w-4 h-4"/> 비밀번호 변경</button>
+                    <button type="button" onClick={handleTeacherPwdChange} className="text-sm font-semibold text-gray-500 hover:text-blue-600 flex items-center gap-1"><Settings className="w-4 h-4"/> 비밀번호 변경</button>
                   )}
-                  <button onClick={handleLogout} className="flex items-center gap-2 text-gray-500 hover:text-red-500 font-semibold text-sm"><LogOut className="w-4 h-4" /> 로그아웃</button>
+                  <button type="button" onClick={handleLogout} className="flex items-center gap-2 text-gray-500 hover:text-red-500 font-semibold text-sm"><LogOut className="w-4 h-4" /> 로그아웃</button>
                 </div>
               </div>
             )}
@@ -879,7 +879,7 @@
                  <div className="flex flex-col md:flex-row gap-4 items-end">
                     <div className="flex-1 w-full relative">
                        <input type="file" accept=".xlsx, .xls" className="hidden" ref={fileInputRef} onChange={handleBulkFileUpload} />
-                       <button onClick={() => fileInputRef.current?.click()} className="w-full flex items-center justify-center gap-2 bg-blue-600 text-white px-4 py-3 rounded-lg font-bold hover:bg-blue-700 transition shadow-md">
+                       <button type="button" onClick={() => { if (fileInputRef.current) fileInputRef.current.click() }} className="w-full flex items-center justify-center gap-2 bg-blue-600 text-white px-4 py-3 rounded-lg font-bold hover:bg-blue-700 transition shadow-md">
                          <Upload className="w-5 h-5" /> [{selectedExam}] 엑셀 데이터 올리기
                        </button>
                     </div>
@@ -912,7 +912,7 @@
                          <select value={selectedStudentForTeacher} onChange={(e) => setSelectedStudentForTeacher(e.target.value)} className="flex-1 p-3 rounded-lg border border-gray-300 focus:ring-2 focus:ring-emerald-500 font-bold text-emerald-800 outline-none shadow-sm">
                            {students.map(s => <option key={s} value={s}>{s}</option>)}
                          </select>
-                         <button onClick={handleResetStudentPwd} className="text-xs font-bold bg-red-50 text-red-600 p-3 rounded-lg border border-red-200 hover:bg-red-100 transition whitespace-nowrap shadow-sm">
+                         <button type="button" onClick={handleResetStudentPwd} className="text-xs font-bold bg-red-50 text-red-600 p-3 rounded-lg border border-red-200 hover:bg-red-100 transition whitespace-nowrap shadow-sm">
                            비밀번호 0000 초기화
                          </button>
                        </div>
@@ -994,7 +994,7 @@
 
             {!isCapturing && (
               <div className="pt-6 flex justify-center gap-4">
-                 <button onClick={handleDownloadImage} className={`inline-flex items-center gap-2 text-white px-8 py-4 rounded-full font-bold text-lg transition shadow-lg ${isSemesterFinal ? 'bg-purple-700 hover:bg-purple-800' : 'bg-gray-800 hover:bg-gray-900'}`}>
+                 <button type="button" onClick={handleDownloadImage} className={`inline-flex items-center gap-2 text-white px-8 py-4 rounded-full font-bold text-lg transition shadow-lg ${isSemesterFinal ? 'bg-purple-700 hover:bg-purple-800' : 'bg-gray-800 hover:bg-gray-900'}`}>
                    <ImageIcon className="w-6 h-6" /> 이미지로 저장
                  </button>
               </div>
