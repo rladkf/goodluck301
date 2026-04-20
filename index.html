@@ -356,6 +356,7 @@
       const [user, setUser] = useState(null);
       const [docData, setDocData] = useState(null);
       const [authError, setAuthError] = useState(null); // 에러 상태 추가
+      const currentDomain = window.location.hostname; // 현재 접속중인 도메인 확인용
       
       const [loginMode, setLoginMode] = useState(null); 
       const [currentUserRole, setCurrentUserRole] = useState(null); 
@@ -418,7 +419,7 @@
         setTimeout(() => setAlertMsg(""), 3000);
       };
 
-      // 에러 화면 렌더링 (도메인 미등록 등 보안 문제 발생 시)
+      // 에러 화면 렌더링 (도메인 미등록 등 보안 문제 발생 시 자동으로 현재 도메인 안내)
       if (authError) {
         return (
           <div className="min-h-screen bg-red-50 flex flex-col items-center justify-center p-6 text-center font-sans">
@@ -435,8 +436,8 @@
                   <li><a href="https://console.firebase.google.com/" target="_blank" className="text-blue-600 hover:underline">파이어베이스 콘솔</a>에 접속합니다.</li>
                   <li>왼쪽 메뉴에서 <b>Authentication(인증)</b> -> 상단 <b>설정(Settings)</b> 탭을 누릅니다.</li>
                   <li><b>승인된 도메인(Authorized domains)</b> 항목을 찾아주세요.</li>
-                  <li><b>[도메인 추가]</b> 버튼을 누르고 현재 화면 위쪽의 인터넷 주소<br/>
-                    <span className="text-sm text-gray-500 font-normal bg-white px-2 py-1 rounded inline-block mt-1 shadow-sm">(예: 상정중.netlify.app)</span> 을 적고 추가해 주세요.
+                  <li><b>[도메인 추가]</b> 버튼을 누르고 아래의 주소를 복사해서 정확히 붙여넣어 주세요!<br/>
+                    <span className="text-lg font-bold text-red-600 bg-red-100 px-3 py-1 rounded inline-block mt-2 shadow-sm border border-red-300 select-all">{currentDomain}</span>
                   </li>
                   <li>추가 후 이 화면을 <b>새로고침</b> 하시면 정상 작동합니다!</li>
                 </ol>
@@ -555,8 +556,6 @@
         const spValid = rp === 0 || (sub.scorePerf !== "" && sub.scorePerf !== null && sub.scorePerf !== undefined);
         return s1Valid && s2Valid && spValid;
       });
-
-      const handleTeacherLoginDirect = async () => { ... } // Used via input
 
       return (
         <div className="min-h-screen bg-emerald-50 py-8 px-4 font-sans text-gray-800">
