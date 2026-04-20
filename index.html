@@ -355,8 +355,8 @@
     const App = () => {
       const [user, setUser] = useState(null);
       const [docData, setDocData] = useState(null);
-      const [authError, setAuthError] = useState(null); // 에러 상태 추가
-      const currentDomain = window.location.hostname; // 현재 접속중인 도메인 확인용
+      const [authError, setAuthError] = useState(null); 
+      const currentDomain = window.location.hostname; 
       
       const [loginMode, setLoginMode] = useState(null); 
       const [currentUserRole, setCurrentUserRole] = useState(null); 
@@ -381,7 +381,7 @@
             }
           } catch (error) { 
             console.error("Auth error:", error); 
-            setAuthError(error); // 에러 저장
+            setAuthError(error); 
           }
         };
         initAuth();
@@ -391,7 +391,8 @@
 
       useEffect(() => {
         if (!user) return;
-        const docRef = doc(db, 'artifacts', appId, 'public', 'data', 'class_data');
+        // 경로 에러를 유발했던 코드를 'main' 문서명 추가로 완벽하게 수정했습니다.
+        const docRef = doc(db, 'artifacts', appId, 'public', 'data', 'class_data', 'main');
         
         const unsubscribe = onSnapshot(docRef, (snap) => {
           if (snap.exists()) {
@@ -557,6 +558,190 @@
         return s1Valid && s2Valid && spValid;
       });
 
+      const handleTeacherLoginDirect = async () => {
+        if (!docData.teacherPwd) {
+          if (!newPasswordInput) return showAlert("새로운 비밀번호를 입력해주세요.");
+          const docRef = doc(db, 'artifacts', appId, 'public', 'data', 'class_data', 'main');
+          await updateDoc(docRef, { teacherPwd: newPasswordInput });
+          showAlert("관리자 비밀번호가 설정되었습니다!");
+          setCurrentUserRole('teacher');
+          setLoginMode(null);
+          setNewPasswordInput("");
+        } else {
+          if (passwordInput === docData.teacherPwd) {
+            setCurrentUserRole('teacher');
+            setLoginMode(null);
+            setPasswordInput("");
+          } else {
+            showAlert("비밀번호가 일치하지 않습니다.");
+          }
+        }
+      };
+
+      const handleTeacherPwdChangeDirect = async () => {
+        const newPwd = prompt("새로운 관리자 비밀번호를 입력하세요:");
+        if (newPwd) {
+          const docRef = doc(db, 'artifacts', appId, 'public', 'data', 'class_data', 'main');
+          await updateDoc(docRef, { teacherPwd: newPwd });
+          showAlert("관리자 비밀번호가 성공적으로 변경되었습니다.");
+        }
+      };
+
+      const handleResetStudentPwdDirect = async () => {
+        if(window.confirm(`${selectedStudentForTeacher} 학생의 비밀번호를 '0000'으로 초기화하시겠습니까?`)) {
+          const docRef = doc(db, 'artifacts', appId, 'public', 'data', 'class_data', 'main');
+          await updateDoc(docRef, { [`students.${selectedStudentForTeacher}.pwd`]: "0000" });
+          showAlert("비밀번호가 '0000'으로 초기화되었습니다.");
+        }
+      };
+
+      const handleStudentLoginDirect = async () => {
+        if (!currentUserName) return showAlert("이름을 선택해주세요.");
+        const studentData = docData.students[currentUserName];
+        
+        if (!studentData.pwd) {
+          if (!/^\d{4}$/.test(newPasswordInput)) return showAlert("비밀번호는 반드시 숫자 4자리로 입력해주세요.");
+          const docRef = doc(db, 'artifacts', appId, 'public', 'data', 'class_data', 'main');
+          await updateDoc(docRef, { [`students.${currentUserName}.pwd`]: newPasswordInput });
+          setCurrentUserRole('student');
+          setLoginMode(null);
+          setNewPasswordInput("");
+          showAlert("비밀번호가 설정되었습니다!");
+        } else {
+          if (passwordInput === studentData.pwd) {
+            setCurrentUserRole('student');
+            setLoginMode(null);
+            setPasswordInput("");
+          } else {
+            showAlert("비밀번호가 일치하지 않습니다.");
+          }
+        }
+      };
+
+      const updateStudentDataDirect = async (studentName, exam, field, value) => {
+        if (!docData || !docData.students[studentName]) return;
+        const docRef = doc(db, 'artifacts', appId, 'public', 'data', 'class_data', 'main');
+        await updateDoc(docRef, { [`students.${studentName}.exams.${exam}.${field}`]: value });
+      };
+
+      const handleSubjectChangeDirect = (subjectName, field, value) => {
+        const activeStudent = currentUserRole === 'teacher' ? selectedStudentForTeacher : currentUserName;
+        const currentSubjects = [...(docData.students[activeStudent]?.exams[selectedExam]?.subjects || [])];
+        
+        const isSem2 = selectedExam.includes("2학기");
+        const currentFixedSubjects = isSem2 ? FIXED_SUBJECTS_SEM2 : FIXED_SUBJECTS_SEM1;
+        
+        const index = currentSubjects.findIndex(s => s.name === subjectName);
+        if (index >= 0) {
+          currentSubjects[index] = { ...currentSubjects[index], [field]: value };
+        } else {
+          const fixedSub = currentFixedSubjects.find(s => s.name === subjectName);
+          currentSubjects.push({
+            id: Date.now() + Math.random(),
+            name: subjectName,
+            ratio1: fixedSub.ratio1,
+            ratio2: fixedSub.ratio2,
+            ratioPerf: fixedSub.ratioPerf,
+            target: "", score: "", prevScore: "", score1: "", score2: "", scorePerf: "", expectedPerf: fixedSub.ratioPerf,
+            [field]: value
+          });
+        }
+        updateStudentDataDirect(activeStudent, selectedExam, 'subjects', currentSubjects);
+      };
+
+      const handleBulkFileUploadDirect = async (e) => {
+        const file = e.target.files[0];
+        if (!file) return;
+
+        if (typeof window.XLSX === 'undefined') {
+          showAlert("엑셀 라이브러리를 불러오는 중입니다. 잠시 후 시도해주세요.");
+          return;
+        }
+
+        const reader = new FileReader();
+        reader.onload = async (evt) => {
+          try {
+            const bstr = evt.target.result;
+            const wb = window.XLSX.read(bstr, { type: 'binary' });
+            const ws = wb.Sheets[wb.SheetNames[0]];
+            const data = window.XLSX.utils.sheet_to_json(ws, { header: 1 });
+            
+            if (data.length < 2) return showAlert("데이터가 부족합니다. 형식을 확인해주세요.");
+
+            const headers = data[0];
+            const updates = {};
+            const isSemesterFinal = selectedExam.includes("학기말");
+            const isSem2 = selectedExam.includes("2학기");
+            const currentFixedSubjects = isSem2 ? FIXED_SUBJECTS_SEM2 : FIXED_SUBJECTS_SEM1;
+            const validSubjectNames = currentFixedSubjects.map(s => s.name);
+
+            for (let i = 1; i < data.length; i++) {
+              const row = data[i];
+              const studentName = row[0] ? String(row[0]).trim() : "";
+              
+              if (students.includes(studentName)) {
+                const existingSubjects = docData.students[studentName]?.exams[selectedExam]?.subjects || [];
+                let newSubjectsMap = new Map();
+                existingSubjects.forEach(s => newSubjectsMap.set(s.name, { ...s }));
+                
+                for (let j = 1; j < headers.length; j++) {
+                  const rawHeader = headers[j];
+                  if (!rawHeader) continue;
+                  
+                  const scoreVal = row[j];
+                  if (scoreVal === undefined || scoreVal === null || isNaN(Number(scoreVal))) continue;
+                  const rawScore = Number(scoreVal);
+                  
+                  if (isSemesterFinal) {
+                    const parts = String(rawHeader).trim().split('_');
+                    const subjName = parts[0];
+                    const type = parts[1]; 
+                    
+                    if(!validSubjectNames.includes(subjName)) continue;
+
+                    if (!newSubjectsMap.has(subjName)) {
+                       const fixedSub = currentFixedSubjects.find(s => s.name === subjName);
+                       newSubjectsMap.set(subjName, { id: Date.now() + Math.random(), name: subjName, ratio1: fixedSub.ratio1, ratio2: fixedSub.ratio2, ratioPerf: fixedSub.ratioPerf });
+                    }
+                    let subjObj = newSubjectsMap.get(subjName);
+                    if (type === '1차') subjObj.score1 = Math.max(0, Math.min(100, rawScore));
+                    else if (type === '2차') subjObj.score2 = Math.max(0, Math.min(100, rawScore));
+                    else if (type === '수행') subjObj.scorePerf = Math.max(0, Math.min(subjObj.ratioPerf, rawScore)); 
+                    else subjObj.score1 = Math.max(0, Math.min(100, rawScore)); 
+                  } else {
+                    const subjName = String(rawHeader).trim();
+                    if(!validSubjectNames.includes(subjName)) continue;
+
+                    if (!newSubjectsMap.has(subjName)) {
+                       const fixedSub = currentFixedSubjects.find(s => s.name === subjName);
+                       newSubjectsMap.set(subjName, { id: Date.now() + Math.random(), name: subjName, ratio1: fixedSub.ratio1, ratio2: fixedSub.ratio2, ratioPerf: fixedSub.ratioPerf, target: "", score: "", expectedPerf: fixedSub.ratioPerf });
+                    }
+                    let subjObj = newSubjectsMap.get(subjName);
+                    subjObj.score = Math.max(0, Math.min(100, rawScore));
+                  }
+                }
+                
+                const newSubjectsArray = Array.from(newSubjectsMap.values());
+                if(newSubjectsArray.length > 0) updates[`students.${studentName}.exams.${selectedExam}.subjects`] = newSubjectsArray;
+              }
+            }
+
+            if (Object.keys(updates).length > 0) {
+              const docRef = doc(db, 'artifacts', appId, 'public', 'data', 'class_data', 'main');
+              await updateDoc(docRef, updates);
+              showAlert(`${Object.keys(updates).length}명 학생의 성적이 성공적으로 자동 등록되었습니다!`);
+            } else {
+              showAlert("유효한 학생 데이터를 찾을 수 없습니다.");
+            }
+          } catch (error) {
+            console.error(error);
+            showAlert("파일을 읽는 중 오류가 발생했습니다.");
+          }
+        };
+        reader.readAsBinaryString(file);
+        if(fileInputRef.current) fileInputRef.current.value = '';
+      };
+
       return (
         <div className="min-h-screen bg-emerald-50 py-8 px-4 font-sans text-gray-800">
           {alertMsg && <div className="fixed top-4 left-1/2 transform -translate-x-1/2 bg-gray-800 text-white px-6 py-3 rounded-full shadow-lg z-50">{alertMsg}</div>}
@@ -572,7 +757,7 @@
                 </div>
                 <div className="flex gap-4 items-center">
                   {currentUserRole === 'teacher' && (
-                    <button onClick={handleTeacherPwdChange} className="text-sm font-semibold text-gray-500 hover:text-blue-600 flex items-center gap-1"><Settings className="w-4 h-4"/> 비밀번호 변경</button>
+                    <button onClick={handleTeacherPwdChangeDirect} className="text-sm font-semibold text-gray-500 hover:text-blue-600 flex items-center gap-1"><Settings className="w-4 h-4"/> 비밀번호 변경</button>
                   )}
                   <button onClick={handleLogout} className="flex items-center gap-2 text-gray-500 hover:text-red-500 font-semibold text-sm"><LogOut className="w-4 h-4" /> 로그아웃</button>
                 </div>
@@ -586,7 +771,7 @@
                  </h2>
                  <div className="flex flex-col md:flex-row gap-4 items-end">
                     <div className="flex-1 w-full relative">
-                       <input type="file" accept=".xlsx, .xls" className="hidden" ref={fileInputRef} onChange={handleBulkFileUpload} />
+                       <input type="file" accept=".xlsx, .xls" className="hidden" ref={fileInputRef} onChange={handleBulkFileUploadDirect} />
                        <button onClick={() => fileInputRef.current?.click()} className="w-full flex items-center justify-center gap-2 bg-blue-600 text-white px-4 py-3 rounded-lg font-bold hover:bg-blue-700 transition shadow-md">
                          <Upload className="w-5 h-5" /> [{selectedExam}] 엑셀 데이터 올리기
                        </button>
@@ -620,7 +805,7 @@
                          <select value={selectedStudentForTeacher} onChange={(e) => setSelectedStudentForTeacher(e.target.value)} className="flex-1 p-3 rounded-lg border border-gray-300 focus:ring-2 focus:ring-emerald-500 font-bold text-emerald-800 outline-none shadow-sm">
                            {students.map(s => <option key={s} value={s}>{s}</option>)}
                          </select>
-                         <button onClick={handleResetStudentPwd} className="text-xs font-bold bg-red-50 text-red-600 p-3 rounded-lg border border-red-200 hover:bg-red-100 transition whitespace-nowrap shadow-sm">
+                         <button onClick={handleResetStudentPwdDirect} className="text-xs font-bold bg-red-50 text-red-600 p-3 rounded-lg border border-red-200 hover:bg-red-100 transition whitespace-nowrap shadow-sm">
                            비밀번호 0000 초기화
                          </button>
                        </div>
@@ -672,8 +857,8 @@
                       </thead>
                       <tbody>
                         {mergedSubjects.map((subject) => isSemesterFinal ? 
-                          <SemesterRow key={subject.id} subject={subject} onUpdate={handleSubjectChange} isCapturing={isCapturing} /> : 
-                          <StandardRow key={subject.id} subject={subject} isFirstExam={isFirstExam} isSecondExam={isSecondExam} isSem1Exam1={isSem1Exam1} onUpdate={handleSubjectChange} isCapturing={isCapturing} />
+                          <SemesterRow key={subject.id} subject={subject} onUpdate={handleSubjectChangeDirect} isCapturing={isCapturing} /> : 
+                          <StandardRow key={subject.id} subject={subject} isFirstExam={isFirstExam} isSecondExam={isSecondExam} isSem1Exam1={isSem1Exam1} onUpdate={handleSubjectChangeDirect} isCapturing={isCapturing} />
                         )}
                       </tbody>
                     </table>
@@ -683,7 +868,7 @@
                 {!isSemesterFinal && (
                   <section>
                     <h2 className="text-xl font-bold text-emerald-800 mb-4 flex items-center gap-2"><PenTool className="w-6 h-6" /> 나의 다짐</h2>
-                    <ResolutionArea resolution={activeResolution} onUpdate={(val) => updateStudentData(activeStudent, selectedExam, 'resolution', val)} isCapturing={isCapturing} />
+                    <ResolutionArea resolution={activeResolution} onUpdate={(val) => updateStudentDataDirect(activeStudent, selectedExam, 'resolution', val)} isCapturing={isCapturing} />
                   </section>
                 )}
 
