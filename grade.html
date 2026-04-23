@@ -21,8 +21,8 @@
     ::-webkit-scrollbar { width: 8px; height: 8px; }
     ::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 4px; }
     
-    /* 커스텀 라디오 버튼 스타일 */
-    .custom-radio { accent-color: #059669; }
+    /* 커스텀 라디오 버튼 색상 강조 */
+    input[type='radio'] { accent-color: #059669; }
   </style>
 </head>
 <body>
@@ -32,7 +32,7 @@
   <script type="text/babel" data-type="module">
     import { initializeApp } from "https://www.gstatic.com/firebasejs/10.8.1/firebase-app.js";
     import { getAuth, signInWithCustomToken, signInAnonymously, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/10.8.1/firebase-auth.js";
-    // 💡 오프라인 영구 저장(enableIndexedDbPersistence) 기능 추가로 튕김 방지 및 데이터 유지
+    // 💡 오프라인 영구 저장(enableIndexedDbPersistence) 기능 유지 (통신 안정성)
     import { getFirestore, doc, setDoc, updateDoc, onSnapshot, enableIndexedDbPersistence } from "https://www.gstatic.com/firebasejs/10.8.1/firebase-firestore.js";
 
     const { useState, useEffect, useRef } = React;
@@ -47,7 +47,6 @@
       appId: "1:741090437669:web:cf076250d558ff48996dcc"
     };
 
-    // Canvas 환경과 실제 배포 환경 구분
     const isCanvas = typeof __firebase_config !== 'undefined';
     const firebaseConfig = isCanvas ? JSON.parse(__firebase_config) : myFirebaseConfig;
     const app = initializeApp(firebaseConfig);
@@ -55,7 +54,7 @@
     const db = getFirestore(app);
     const appId = typeof __app_id !== 'undefined' ? __app_id : 'sangjeong-grade-analyzer';
 
-    // 오프라인 모드 활성화 (네트워크가 느려도 즉시 저장되고 나중에 반영됨)
+    // 오프라인 모드 활성화 시도
     try {
       enableIndexedDbPersistence(db).catch((err) => {
         console.warn("오프라인 캐시 활성화 안내:", err.code);
@@ -63,7 +62,7 @@
     } catch(e) {}
 
     // 새로운 완벽한 데이터 문서 ID
-    const DOC_ID = 'sangjeong_v11_final';
+    const DOC_ID = 'sangjeong_v12_final';
 
     // 아이콘 SVG 컴포넌트
     const Award = ({className}) => <svg className={className} xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="8" r="7"/><polyline points="8.21 13.89 7 23 12 20 17 23 15.79 13.88"/></svg>;
@@ -176,7 +175,7 @@
       let firstExamNextGradeMsg = null;
       if (isSem1Exam1) {
         if (isSkipped) {
-          firstExamNextGradeMsg = <span className="text-sm text-gray-500">1차시험 미실시</span>;
+          firstExamNextGradeMsg = <span className="text-sm text-gray-500">1차 미실시</span>;
         } else if (hasScore) {
           if (scoreNum >= 90) {
             firstExamNextGradeMsg = <span className="text-sm text-blue-600">최고 등급 달성! 유지 요망</span>;
@@ -394,8 +393,23 @@
       const [modalConfig, setModalConfig] = useState(null);
 
       // 무조건 눈에 띄는 대형 에러/완료 팝업 함수
-      const showErrorModal = (message) => setModalConfig({ type: 'alert', title: '오류 안내', message, onConfirm: () => setModalConfig(null) });
-      const showSuccessModal = (message) => setModalConfig({ type: 'alert', title: '완료', message, onConfirm: () => setModalConfig(null) });
+      const showErrorModal = (message) => {
+        setModalConfig({
+          type: 'alert',
+          title: '오류 안내',
+          message: message,
+          onConfirm: () => setModalConfig(null)
+        });
+      };
+
+      const showSuccessModal = (message) => {
+        setModalConfig({
+          type: 'alert',
+          title: '완료',
+          message: message,
+          onConfirm: () => setModalConfig(null)
+        });
+      };
 
       useEffect(() => {
         const initAuth = async () => {
@@ -423,7 +437,7 @@
           if (snap.exists()) {
             setDocData(snap.data());
           } else {
-            // 완전 초기 데이터
+            // 완전 초기 데이터 세팅
             const initialData = { teacherPwd: null, students: {} };
             students.forEach(s => {
               initialData.students[s] = { pwd: null, exams: {} };
@@ -432,13 +446,13 @@
               });
             });
             
-            // 무한 로딩 방지: 로컬 화면을 즉시 켜주고 백그라운드에서 저장합니다.
+            // 백그라운드에 병합 저장 (화면은 미리 띄워줌)
             setDocData(initialData); 
             setDoc(docRef, initialData, { merge: true }).catch(e => console.error(e));
           }
         }, (error) => {
           console.error(error);
-          setAuthError(error); // 통신 에러 시 명확한 안내 화면으로 전환
+          setAuthError(error); 
         });
         
         return () => unsubscribe();
@@ -455,7 +469,7 @@
         if (loginError) setLoginError("");
       };
 
-      // 에러 화면 렌더링 (도메인 미등록 등 보안 문제 발생 시 자동으로 현재 도메인 안내)
+      // 에러 화면 렌더링 (도메인 미등록 등 보안 문제 발생 시)
       if (authError) {
         return (
           <div className="min-h-screen bg-red-50 flex flex-col items-center justify-center p-4 text-center font-sans">
@@ -492,6 +506,71 @@
           </div>
         );
       }
+
+      // --- 로그인 확인 로직 (무한 대기 방지 / 오프라인 최적화) ---
+      const handleTeacherLogin = () => {
+        setLoginError("");
+        if (!docData.teacherPwd) {
+          // 1. 최초 설정 시
+          if (!newPasswordInput) {
+            setLoginError("새로운 비밀번호를 입력해주세요.");
+            return;
+          }
+          const docRef = doc(db, 'artifacts', appId, 'public', 'data', 'class_data', DOC_ID);
+          // 💡 await를 제거하여 버튼 누름과 동시에 막힘없이 즉시 로그인! (오프라인 캐시 적용)
+          setDoc(docRef, { teacherPwd: newPasswordInput }, { merge: true }).catch(console.error);
+          setCurrentUserRole('teacher');
+          setLoginMode(null);
+          setNewPasswordInput("");
+        } else {
+          // 2. 이미 설정된 비밀번호 확인 (단순 로컬 데이터 비교이므로 통신 무필요)
+          if (passwordInput === docData.teacherPwd) {
+            setCurrentUserRole('teacher');
+            setLoginMode(null);
+            setPasswordInput("");
+          } else {
+            setLoginError("비밀번호가 일치하지 않습니다. 다시 확인해주세요.");
+          }
+        }
+      };
+
+      const handleStudentLogin = () => {
+        setLoginError("");
+        if (!currentUserName) {
+          setLoginError("본인의 이름을 먼저 체크해주세요!");
+          return;
+        }
+        
+        const studentData = (docData && docData.students && docData.students[currentUserName]) ? docData.students[currentUserName] : {};
+        
+        if (!studentData.pwd) {
+          // 1. 학생 최초 비밀번호 설정 시
+          if (!/^\d{4}$/.test(newPasswordInput)) {
+            setLoginError("비밀번호는 반드시 숫자 4자리로만 입력해주세요.");
+            return;
+          }
+          const docRef = doc(db, 'artifacts', appId, 'public', 'data', 'class_data', DOC_ID);
+          // 💡 await 제거 (즉시 반응 및 오프라인 자동 저장)
+          setDoc(docRef, {
+            students: {
+              [currentUserName]: { pwd: newPasswordInput }
+            }
+          }, { merge: true }).catch(console.error);
+          
+          setCurrentUserRole('student');
+          setLoginMode(null);
+          setNewPasswordInput("");
+        } else {
+          // 2. 기존 비밀번호 입력 시 (단순 확인)
+          if (passwordInput === studentData.pwd) {
+            setCurrentUserRole('student');
+            setLoginMode(null);
+            setPasswordInput("");
+          } else {
+            setLoginError("비밀번호가 틀렸습니다. 다시 한번 확인해 주세요.");
+          }
+        }
+      };
 
       // --- LOGIN SCREEN ---
       if (!currentUserRole) {
@@ -537,17 +616,9 @@
             )}
 
             <div className="bg-white rounded-3xl shadow-xl overflow-hidden w-full max-w-sm relative">
-              {/* 🚨 화면 덮기 애니메이션 (버튼 누르면 무조건 나타납니다!) */}
-              {isLoggingIn && (
-                <div className="absolute inset-0 bg-white/80 backdrop-blur-sm flex flex-col items-center justify-center z-50">
-                   <svg className="animate-spin w-8 h-8 text-emerald-600 mb-3" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path></svg>
-                   <span className="text-lg font-bold text-emerald-800">서버 통신 중...</span>
-                </div>
-              )}
-
               <div className="bg-emerald-600 p-6 text-center text-white">
                 <Award className="w-10 h-10 mx-auto mb-3" />
-                <h1 className="text-xl font-bold mb-1">상정중 3-1 성적 프로젝트 <span className="text-xs text-yellow-300 ml-1 font-black">v11.0</span></h1>
+                <h1 className="text-xl font-bold mb-1">상정중 3-1 성적 프로젝트 <span className="text-xs text-yellow-300 ml-1 font-black">v12.0</span></h1>
                 <p className="text-emerald-100 text-sm">아름샘이 항상 응원해! 💪✨</p>
               </div>
               <div className="p-6">
@@ -564,57 +635,32 @@
                     {!docData.teacherPwd ? (
                       <>
                         <p className="text-xs text-blue-600 text-center font-bold">최초 접속입니다. 관리자 비밀번호를 설정해주세요.</p>
-                        <input type="password" value={newPasswordInput} onChange={handleNewPasswordChange} onKeyDown={(e) => { if(e.key === 'Enter') { e.preventDefault(); document.getElementById('teacherNewLoginBtn').click(); } }} placeholder="새 비밀번호 입력" className="w-full p-3 border rounded-lg focus:ring-2 focus:ring-blue-500 outline-none text-sm" />
+                        <input type="password" value={newPasswordInput} onChange={handleNewPasswordChange} onKeyDown={(e) => { if(e.key === 'Enter') { e.preventDefault(); handleTeacherLogin(); } }} placeholder="새 비밀번호 입력" className="w-full p-3 border rounded-lg focus:ring-2 focus:ring-blue-500 outline-none text-sm" />
                       </>
                     ) : (
-                      <input type="password" value={passwordInput} onChange={handlePasswordChange} onKeyDown={(e) => { if(e.key === 'Enter') { e.preventDefault(); document.getElementById('teacherLoginBtn').click(); } }} placeholder="비밀번호 입력" className="w-full p-3 border rounded-lg focus:ring-2 focus:ring-emerald-500 outline-none text-sm" />
+                      <input type="password" value={passwordInput} onChange={handlePasswordChange} onKeyDown={(e) => { if(e.key === 'Enter') { e.preventDefault(); handleTeacherLogin(); } }} placeholder="비밀번호 입력" className="w-full p-3 border rounded-lg focus:ring-2 focus:ring-emerald-500 outline-none text-sm" />
                     )}
                     
                     {loginError && <p className="text-red-500 font-bold text-xs text-center animate-pulse">{loginError}</p>}
                     
-                    <button id={!docData.teacherPwd ? "teacherNewLoginBtn" : "teacherLoginBtn"} type="button" onClick={async () => {
-                      setIsLoggingIn(true);
-                      await new Promise(r => setTimeout(r, 100)); // UI 갱신 대기
-                      try {
-                        if (!docData.teacherPwd) {
-                          if (!newPasswordInput) {
-                            setLoginError("새로운 비밀번호를 입력해주세요.");
-                            setIsLoggingIn(false);
-                            return;
-                          }
-                          const docRef = doc(db, 'artifacts', appId, 'public', 'data', 'class_data', DOC_ID);
-                          // 💡 무한 대기 타이머 제거. 오프라인 캐시가 있다면 즉시 로컬 저장, 없으면 끝까지 기다림
-                          await setDoc(docRef, { teacherPwd: newPasswordInput }, { merge: true });
-                          setCurrentUserRole('teacher'); setLoginMode(null); setNewPasswordInput("");
-                        } else {
-                          if (passwordInput === docData.teacherPwd) {
-                            setCurrentUserRole('teacher'); setLoginMode(null); setPasswordInput("");
-                          } else {
-                            setLoginError("비밀번호가 일치하지 않습니다. 다시 확인해주세요.");
-                          }
-                        }
-                      } catch(e) { 
-                        setLoginError("네트워크 연결이 지연되고 있습니다. 인터넷을 확인해주세요."); 
-                      }
-                      finally { setIsLoggingIn(false); }
-                    }} className="w-full py-3 text-white rounded-lg font-bold transition bg-emerald-600 hover:bg-emerald-700 text-sm">로그인</button>
+                    <button type="button" onClick={handleTeacherLogin} className="w-full py-3 text-white rounded-lg font-bold transition bg-emerald-600 hover:bg-emerald-700 text-sm">로그인</button>
                     <button type="button" onClick={() => { setLoginMode(null); setLoginError(""); }} className="w-full py-2 text-gray-500 font-semibold text-xs">돌아가기</button>
                     
                     {(docData && docData.teacherPwd) && (
                       <button type="button" onClick={() => setModalConfig({ 
-                        type: 'confirm', 
+                        type: 'prompt', 
                         title: '관리자 비밀번호 초기화', 
-                        message: '관리자 비밀번호를 완전히 초기화하시겠습니까?\n(초기화 후 처음부터 다시 설정해야 합니다.)', 
-                        onConfirm: async () => {
-                          setIsLoggingIn(true);
-                          setModalConfig(null);
-                          try {
+                        message: '보안을 위해 [초기화 마스터 코드]를 입력하세요.\n(마스터 코드는 선생님만 알고 계셔야 합니다.)', 
+                        onConfirm: async (code) => {
+                          if(code === "상정중") {
+                            setModalConfig(null);
                             const docRef = doc(db, 'artifacts', appId, 'public', 'data', 'class_data', DOC_ID);
-                            await setDoc(docRef, { teacherPwd: null }, { merge: true });
+                            setDoc(docRef, { teacherPwd: null }, { merge: true }).catch(console.error);
                             showSuccessModal("관리자 비밀번호가 초기화되었습니다.\n처음부터 다시 설정하세요."); 
                             setLoginMode(null);
-                          } catch(e) { showErrorModal("초기화 실패: 네트워크 상태를 확인하세요."); }
-                          finally { setIsLoggingIn(false); }
+                          } else {
+                            showErrorModal("마스터 코드가 틀렸습니다. 초기화할 수 없습니다.");
+                          }
                       }, onCancel: () => setModalConfig(null) })} className="w-full text-red-400 text-xs font-semibold underline mt-1">비밀번호를 잊으셨나요? (초기화)</button>
                     )}
                   </div>
@@ -622,12 +668,12 @@
                 
                 {loginMode === 'student' && (
                   <div className="space-y-4">
-                    <h2 className="text-lg font-bold text-center text-gray-800 flex items-center justify-center gap-2"><User className="w-4 h-4"/> 학생 로그인</h2>
+                    <h2 className="text-lg font-bold text-center text-gray-800 flex items-center justify-center gap-2"><User className="w-4 h-4"/> 학생 선택</h2>
                     
-                    {/* 💡 새로운 라디오 버튼 스타일의 학생 선택 리스트 */}
+                    {/* 💡 새로운 라디오 버튼 명렬표 (명확한 체크 강제) */}
                     <div className="w-full border rounded-lg max-h-56 overflow-y-auto bg-white custom-scrollbar shadow-inner text-left">
                       {students.map(s => (
-                        <label key={s} className={`flex items-center justify-between p-3 border-b border-gray-100 cursor-pointer transition ${currentUserName === s ? 'bg-emerald-50' : 'hover:bg-gray-50'}`}>
+                        <div key={s} className={`flex items-center justify-between p-3 border-b border-gray-100 transition ${currentUserName === s ? 'bg-emerald-50' : 'hover:bg-gray-50'}`}>
                           <span className={`font-bold text-sm ${currentUserName === s ? 'text-emerald-700' : 'text-gray-700'}`}>{s}</span>
                           <input 
                             type="radio" 
@@ -635,56 +681,33 @@
                             value={s} 
                             checked={currentUserName === s} 
                             onChange={(e) => { setCurrentUserName(e.target.value); setPasswordInput(""); setNewPasswordInput(""); setLoginError(""); }} 
-                            className="w-5 h-5 text-emerald-600 focus:ring-emerald-500 custom-radio cursor-pointer"
+                            className="w-5 h-5 accent-emerald-600 cursor-pointer"
                           />
-                        </label>
+                        </div>
                       ))}
                     </div>
                     
                     {currentUserName && !(docData && docData.students && docData.students[currentUserName] && docData.students[currentUserName].pwd) && (
                       <div className="p-4 bg-yellow-50 rounded-lg border border-yellow-200">
                         <p className="text-xs text-yellow-800 font-semibold mb-2">최초 접속입니다. <span className="text-red-500">숫자 4자리</span>로 설정하세요.</p>
-                        <input type="password" maxLength="4" value={newPasswordInput} onChange={handleNewPasswordChange} onKeyDown={(e) => { if(e.key === 'Enter') { e.preventDefault(); document.getElementById('studentNewLoginBtn').click(); } }} placeholder="숫자 4자리" className="w-full p-3 border border-yellow-300 rounded-lg text-center tracking-widest text-lg font-bold mb-3 outline-none focus:ring-2 focus:ring-yellow-500" />
+                        <input type="password" maxLength="4" value={newPasswordInput} onChange={handleNewPasswordChange} onKeyDown={(e) => { if(e.key === 'Enter') { e.preventDefault(); handleStudentLogin(); } }} placeholder="숫자 4자리" className="w-full p-3 border border-yellow-300 rounded-lg text-center tracking-widest text-lg font-bold mb-3 outline-none focus:ring-2 focus:ring-yellow-500" />
                         
                         {loginError && <p className="text-red-500 font-bold text-xs mb-2 text-center animate-pulse">{loginError}</p>}
                         
-                        <button id="studentNewLoginBtn" type="button" onClick={async () => {
-                          if (!/^\d{4}$/.test(newPasswordInput)) {
-                            setLoginError("숫자 4자리로 입력해주세요.");
-                            return;
-                          }
-                          setIsLoggingIn(true);
-                          try {
-                            const docRef = doc(db, 'artifacts', appId, 'public', 'data', 'class_data', DOC_ID);
-                            // 무한 대기 타이머 제거! 오프라인 캐시 적용으로 즉각 반응 보장
-                            await setDoc(docRef, { students: { [currentUserName]: { pwd: newPasswordInput } } }, { merge: true });
-                            setCurrentUserRole('student'); setLoginMode(null); setNewPasswordInput("");
-                          } catch(e) { setLoginError("네트워크 오류 발생. 인터넷 연결을 확인하세요."); }
-                          finally { setIsLoggingIn(false); }
-                        }} className="w-full py-3 text-white rounded-lg font-bold transition bg-yellow-500 hover:bg-yellow-600 text-sm shadow-md">비밀번호 설정 및 시작</button>
+                        <button type="button" onClick={handleStudentLogin} className="w-full py-3 text-white rounded-lg font-bold transition bg-yellow-500 hover:bg-yellow-600 text-sm shadow-md">비밀번호 설정 및 시작</button>
                       </div>
                     )}
                     
                     {currentUserName && (docData && docData.students && docData.students[currentUserName] && docData.students[currentUserName].pwd) && (
                       <>
-                        <input type="password" value={passwordInput} onChange={handlePasswordChange} onKeyDown={(e) => { if(e.key === 'Enter') { e.preventDefault(); document.getElementById('studentLoginBtn').click(); } }} placeholder="비밀번호 입력" className="w-full p-3 border rounded-lg outline-none text-center tracking-widest text-lg focus:ring-2 focus:ring-emerald-500" />
+                        <input type="password" value={passwordInput} onChange={handlePasswordChange} onKeyDown={(e) => { if(e.key === 'Enter') { e.preventDefault(); handleStudentLogin(); } }} placeholder="비밀번호 입력" className="w-full p-3 border rounded-lg outline-none text-center tracking-widest text-lg focus:ring-2 focus:ring-emerald-500" />
                         
                         {loginError && <p className="text-red-500 font-bold text-xs mb-2 text-center animate-pulse">{loginError}</p>}
                         
-                        <button id="studentLoginBtn" type="button" onClick={async () => {
-                          setIsLoggingIn(true);
-                          await new Promise(r => setTimeout(r, 100));
-                          try {
-                            if (passwordInput === docData.students[currentUserName].pwd) {
-                              setCurrentUserRole('student'); setLoginMode(null); setPasswordInput("");
-                            } else {
-                              setLoginError("비밀번호가 틀렸습니다.");
-                            }
-                          } catch(e) { setLoginError("에러 발생"); } finally { setIsLoggingIn(false); }
-                        }} className="w-full py-3 text-white rounded-lg font-bold transition bg-emerald-600 hover:bg-emerald-700 text-sm shadow-md">로그인</button>
+                        <button type="button" onClick={handleStudentLogin} className="w-full py-3 text-white rounded-lg font-bold transition bg-emerald-600 hover:bg-emerald-700 text-sm shadow-md">로그인</button>
                       </>
                     )}
-                    <button type="button" onClick={() => { setLoginMode(null); setLoginError(""); }} className="w-full py-2 text-gray-500 font-semibold text-xs">돌아가기</button>
+                    <button type="button" onClick={() => { setLoginMode(null); setLoginError(""); setCurrentUserName(""); }} className="w-full py-2 text-gray-500 font-semibold text-xs">돌아가기</button>
                   </div>
                 )}
               </div>
@@ -749,15 +772,11 @@
             if (newPwd) {
               setModalConfig(null);
               setIsLoggingIn(true);
-              try {
-                const docRef = doc(db, 'artifacts', appId, 'public', 'data', 'class_data', DOC_ID);
-                await setDoc(docRef, { teacherPwd: newPwd }, { merge: true });
-                showSuccessModal("관리자 비밀번호가 성공적으로 변경되었습니다.");
-              } catch(e) {
-                showErrorModal("변경 실패: 인터넷 상태를 확인하세요.");
-              } finally {
-                setIsLoggingIn(false);
-              }
+              const docRef = doc(db, 'artifacts', appId, 'public', 'data', 'class_data', DOC_ID);
+              // 백그라운드 저장으로 즉시 성공 처리
+              setDoc(docRef, { teacherPwd: newPwd }, { merge: true }).catch(console.error);
+              setIsLoggingIn(false);
+              showSuccessModal("관리자 비밀번호가 성공적으로 변경되었습니다.");
             } else {
               setModalConfig(null);
             }
@@ -766,28 +785,22 @@
         });
       };
 
-      // 학생 비밀번호 초기화 전용 함수 (모달 닫힘 로직 및 애니메이션 완벽 지원)
       const handleResetStudentPwd = () => {
         setModalConfig({
           type: 'confirm',
           title: '비밀번호 초기화',
           message: `${selectedStudentForTeacher} 학생의 비밀번호를 '0000'으로 초기화하시겠습니까?`,
           onConfirm: async () => {
-            setModalConfig(null); // 모달 먼저 닫기
-            setIsLoggingIn(true); // 통신 중 애니메이션 켜기
-            try {
-              const docRef = doc(db, 'artifacts', appId, 'public', 'data', 'class_data', DOC_ID);
-              await setDoc(docRef, {
-                students: {
-                  [selectedStudentForTeacher]: { pwd: "0000" }
-                }
-              }, { merge: true });
-              showSuccessModal(`${selectedStudentForTeacher} 학생의 비밀번호가 '0000'으로 초기화되었습니다.`);
-            } catch(e) {
-              showErrorModal("초기화 실패: 네트워크 상태를 확인해주세요.");
-            } finally {
-              setIsLoggingIn(false); // 통신 중 애니메이션 끄기
-            }
+            setModalConfig(null); 
+            setIsLoggingIn(true);
+            const docRef = doc(db, 'artifacts', appId, 'public', 'data', 'class_data', DOC_ID);
+            setDoc(docRef, {
+              students: {
+                [selectedStudentForTeacher]: { pwd: "0000" }
+              }
+            }, { merge: true }).catch(console.error);
+            setIsLoggingIn(false);
+            showSuccessModal(`${selectedStudentForTeacher} 학생의 비밀번호가 '0000'으로 초기화되었습니다.`);
           },
           onCancel: () => setModalConfig(null)
         });
@@ -797,7 +810,8 @@
         if (!docData || !docData.students || !docData.students[studentName]) return;
         const docRef = doc(db, 'artifacts', appId, 'public', 'data', 'class_data', DOC_ID);
         try {
-          await setDoc(docRef, {
+          // 백그라운드 동기화
+          setDoc(docRef, {
             students: {
               [studentName]: {
                 exams: {
@@ -807,11 +821,8 @@
                 }
               }
             }
-          }, { merge: true });
-        } catch(e) {
-          // 일시적인 통신 단절은 백그라운드(IndexedDB)에서 처리됨
-          console.error("데이터 저장 실패:", e);
-        }
+          }, { merge: true }).catch(console.error);
+        } catch(e) {}
       };
 
       const handleSubjectChange = (subjectName, field, value) => {
@@ -839,7 +850,7 @@
         updateStudentData(activeStudent, selectedExam, 'subjects', currentSubjects);
       };
 
-      // 엑셀 일괄 업로드 함수 (로딩 애니메이션 완벽 연동)
+      // 엑셀 일괄 업로드 함수
       const handleBulkFileUpload = async (e) => {
         const file = e.target.files[0];
         if (!file) return;
@@ -851,7 +862,7 @@
 
         const reader = new FileReader();
         reader.onload = async (evt) => {
-          setIsLoggingIn(true); // 엑셀 분석 및 업로드 중 애니메이션 켜기
+          setIsLoggingIn(true); 
           try {
             const bstr = evt.target.result;
             const wb = window.XLSX.read(bstr, { type: 'binary' });
@@ -927,7 +938,8 @@
 
             if (Object.keys(updates.students).length > 0) {
               const docRef = doc(db, 'artifacts', appId, 'public', 'data', 'class_data', DOC_ID);
-              await setDoc(docRef, updates, { merge: true });
+              // 백그라운드 갱신
+              setDoc(docRef, updates, { merge: true }).catch(console.error);
               showSuccessModal(`${Object.keys(updates.students).length}명 학생의 성적이 엑셀로부터 성공적으로 등록되었습니다!`);
             } else {
               showErrorModal("엑셀 파일에 유효한 학생 데이터가 없습니다.\n양식을 다시 확인해주세요.");
@@ -936,7 +948,7 @@
             console.error(error);
             showErrorModal("파일 처리 중 오류가 발생했습니다.");
           } finally {
-            setIsLoggingIn(false); // 애니메이션 종료
+            setIsLoggingIn(false);
           }
         };
         reader.readAsBinaryString(file);
