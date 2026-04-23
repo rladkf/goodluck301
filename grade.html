@@ -52,9 +52,9 @@
     const appId = typeof __app_id !== 'undefined' ? __app_id : 'sangjeong-grade-analyzer';
 
     // 💡 완벽하게 정상 작동하는 최종 데이터베이스 문서
-    const DOC_ID = 'sangjeong_v9_final';
+    const DOC_ID = 'sangjeong_v10_final';
 
-    // 무한 로딩 방지용 타이머
+    // 🚨 무한 로딩 방지용 타이머 (모바일 첫 연결 지연 고려하여 10초로 대폭 늘림!)
     const withTimeout = (promise, ms, errorMessage) => {
       let timeoutId;
       const timeoutPromise = new Promise((_, reject) => {
@@ -416,7 +416,7 @@
 
               <div className="bg-emerald-600 p-8 text-center text-white">
                 <Award className="w-12 h-12 mx-auto mb-4" />
-                <h1 className="text-2xl font-bold mb-2">상정중 3-1 성적 향상 프로젝트 <span className="text-sm text-yellow-300 ml-2">v10.0</span></h1>
+                <h1 className="text-2xl font-bold mb-2">상정중 3-1 성적 향상 프로젝트 <span className="text-sm text-yellow-300 ml-2 font-black">v10.0</span></h1>
                 <p className="text-emerald-100">아름샘이 항상 응원해! 💪✨</p>
               </div>
               <div className="p-8">
@@ -446,7 +446,7 @@
                         if (!docData.teacherPwd) {
                           if (!newPasswordInput) return showErrorModal("새로운 비밀번호를 입력해주세요.");
                           const docRef = doc(db, 'artifacts', appId, 'public', 'data', 'class_data', DOC_ID);
-                          await withTimeout(setDoc(docRef, { teacherPwd: newPasswordInput }, { merge: true }), 4000, "서버 연결 지연");
+                          await withTimeout(setDoc(docRef, { teacherPwd: newPasswordInput }, { merge: true }), 10000, "서버 연결 지연: 데이터(LTE) 연결을 확인하세요.");
                           setCurrentUserRole('teacher'); setLoginMode(null); setNewPasswordInput("");
                         } else {
                           if (passwordInput === docData.teacherPwd) {
@@ -455,17 +455,20 @@
                             showErrorModal("비밀번호가 일치하지 않습니다.");
                           }
                         }
-                      } catch(e) { showErrorModal("통신 오류 발생: 데이터를 켜주세요."); }
+                      } catch(e) { showErrorModal("통신 오류 발생: 인터넷 연결 상태를 확인해주세요."); }
                       finally { setIsLoggingIn(false); }
                     }} className="w-full py-3 text-white rounded-lg font-bold transition bg-emerald-600 hover:bg-emerald-700">로그인</button>
                     <button onClick={() => setLoginMode(null)} className="w-full py-2 text-gray-500 font-semibold text-sm">돌아가기</button>
                     
                     {docData.teacherPwd && <button onClick={() => setModalConfig({ type: 'confirm', title: '관리자 초기화', message: '비밀번호를 초기화하시겠습니까?', onConfirm: async () => {
+                      setIsLoggingIn(true);
+                      setModalConfig(null);
                       try {
                         const docRef = doc(db, 'artifacts', appId, 'public', 'data', 'class_data', DOC_ID);
-                        await setDoc(docRef, { teacherPwd: null }, { merge: true });
+                        await withTimeout(setDoc(docRef, { teacherPwd: null }, { merge: true }), 10000, "서버 지연");
                         showSuccessModal("초기화 완료"); setLoginMode(null);
                       } catch(e) { showErrorModal("오류 발생"); }
+                      finally { setIsLoggingIn(false); }
                     }, onCancel: () => setModalConfig(null) })} className="w-full py-2 text-red-400 text-xs underline">비밀번호를 잊으셨나요?</button>}
                   </div>
                 )}
@@ -473,7 +476,7 @@
                 {loginMode === 'student' && (
                   <div className="space-y-5">
                     <h2 className="text-xl font-bold text-center text-gray-800 flex items-center justify-center gap-2"><User className="w-5 h-5"/> 학생 로그인</h2>
-                    <select value={currentUserName} onChange={(e) => { setCurrentUserName(e.target.value); setPasswordInput(""); setNewPasswordInput(""); }} className="w-full p-3 border rounded-lg outline-none font-bold">
+                    <select value={currentUserName} onChange={(e) => { setCurrentUserName(e.target.value); setPasswordInput(""); setNewPasswordInput(""); }} className="w-full p-3 border rounded-lg outline-none font-bold text-gray-800">
                       <option value="">이름을 선택하세요</option>
                       {students.map(s => <option key={s} value={s}>{s}</option>)}
                     </select>
@@ -487,9 +490,9 @@
                           setIsLoggingIn(true);
                           try {
                             const docRef = doc(db, 'artifacts', appId, 'public', 'data', 'class_data', DOC_ID);
-                            await withTimeout(setDoc(docRef, { students: { [currentUserName]: { pwd: newPasswordInput } } }, { merge: true }), 4000, "서버 연결 지연");
+                            await withTimeout(setDoc(docRef, { students: { [currentUserName]: { pwd: newPasswordInput } } }, { merge: true }), 10000, "서버 연결 지연: 데이터(LTE) 연결을 확인하세요.");
                             setCurrentUserRole('student'); setLoginMode(null); setNewPasswordInput("");
-                          } catch(e) { showErrorModal("통신 오류 발생: 데이터를 켜주세요."); }
+                          } catch(e) { showErrorModal("통신 오류 발생: 인터넷 연결 상태를 확인해주세요."); }
                           finally { setIsLoggingIn(false); }
                         }} className="w-full py-3 text-white rounded-lg font-bold transition bg-yellow-500 hover:bg-yellow-600">비밀번호 설정 및 시작</button>
                       </div>
@@ -507,7 +510,7 @@
                             } else {
                               showErrorModal("비밀번호가 틀렸습니다.");
                             }
-                          } catch(e) { showErrorModal("에러 발생"); } finally { setIsLoggingIn(false); }
+                          } catch(e) { showErrorModal("통신 오류 발생"); } finally { setIsLoggingIn(false); }
                         }} className="w-full py-3 text-white rounded-lg font-bold transition bg-emerald-600 hover:bg-emerald-700">로그인</button>
                       </>
                     )}
@@ -558,6 +561,29 @@
 
       const handleLogout = () => { setCurrentUserRole(null); setCurrentUserName(""); setLoginMode(null); };
 
+      // 학생 비밀번호 초기화 전용 함수 (버그 수정됨)
+      const handleResetStudentPwd = () => {
+        setModalConfig({
+          type: 'confirm',
+          title: '비밀번호 초기화',
+          message: `${selectedStudentForTeacher} 학생의 비밀번호를 '0000'으로 초기화하시겠습니까?`,
+          onConfirm: async () => {
+            setModalConfig(null);
+            setIsLoggingIn(true);
+            try {
+              const docRef = doc(db, 'artifacts', appId, 'public', 'data', 'class_data', DOC_ID);
+              await withTimeout(setDoc(docRef, { students: { [selectedStudentForTeacher]: { pwd: "0000" } } }, { merge: true }), 10000, "서버 연결 지연");
+              showSuccessModal(`${selectedStudentForTeacher} 학생의 비밀번호가 '0000'으로 초기화되었습니다.`);
+            } catch(e) {
+              showErrorModal("초기화 실패: 인터넷을 확인해주세요.");
+            } finally {
+              setIsLoggingIn(false);
+            }
+          },
+          onCancel: () => setModalConfig(null)
+        });
+      };
+
       const updateStudentData = async (studentName, exam, field, value) => {
         if (!docData || !docData.students[studentName]) return;
         const docRef = doc(db, 'artifacts', appId, 'public', 'data', 'class_data', DOC_ID);
@@ -585,10 +611,11 @@
 
         const reader = new FileReader();
         reader.onload = async (evt) => {
+          setIsLoggingIn(true);
           try {
             const wb = window.XLSX.read(evt.target.result, { type: 'binary' });
             const data = window.XLSX.utils.sheet_to_json(wb.Sheets[wb.SheetNames[0]], { header: 1 });
-            if (data.length < 2) return showErrorModal("데이터가 부족합니다.");
+            if (data.length < 2) { showErrorModal("데이터가 부족합니다."); setIsLoggingIn(false); return; }
 
             const headers = data[0];
             const updates = { students: {} };
@@ -633,10 +660,11 @@
             }
             if (Object.keys(updates.students).length > 0) {
               const docRef = doc(db, 'artifacts', appId, 'public', 'data', 'class_data', DOC_ID);
-              await withTimeout(setDoc(docRef, updates, { merge: true }), 5000, "서버 저장 지연");
+              await withTimeout(setDoc(docRef, updates, { merge: true }), 10000, "서버 저장 지연");
               showSuccessModal(`${Object.keys(updates.students).length}명 학생 성적 자동 등록 완료!`);
             } else { showErrorModal("유효한 학생 데이터 없음."); }
           } catch (error) { showErrorModal("파일 읽기 오류"); }
+          finally { setIsLoggingIn(false); }
         };
         reader.readAsBinaryString(file);
         if(fileInputRef.current) fileInputRef.current.value = '';
@@ -709,7 +737,7 @@
                     {currentUserRole === 'teacher' && !isCapturing ? (
                        <div className="flex gap-2">
                          <select value={selectedStudentForTeacher} onChange={(e) => setSelectedStudentForTeacher(e.target.value)} className="flex-1 p-3 rounded-lg border font-bold text-emerald-800 outline-none">{students.map(s => <option key={s} value={s}>{s}</option>)}</select>
-                         <button onClick={() => setModalConfig({ type: 'confirm', title: '초기화', message: `${selectedStudentForTeacher} 비밀번호를 0000으로?`, onConfirm: async () => { await setDoc(doc(db, 'artifacts', appId, 'public', 'data', 'class_data', DOC_ID), { students: { [selectedStudentForTeacher]: { pwd: "0000" } } }, { merge: true }); showSuccessModal("초기화 완료"); }})} className="px-3 bg-red-50 text-red-600 font-bold border rounded-lg">초기화</button>
+                         <button onClick={handleResetStudentPwd} className="px-3 bg-red-50 text-red-600 font-bold border rounded-lg">초기화</button>
                        </div>
                     ) : (<div className="w-full p-3 bg-white font-bold text-emerald-800 border rounded-lg">{activeStudent}</div>)}
                   </div>
