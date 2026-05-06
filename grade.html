@@ -5,31 +5,31 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>상정중 3-1 성적 향상 프로젝트</title>
   
+  <!-- React & Babel & Tailwind CDN -->
   <script src="https://unpkg.com/react@18/umd/react.production.min.js" crossorigin></script>
   <script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js" crossorigin></script>
   <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
   <script src="https://cdn.tailwindcss.com"></script>
   
+  <!-- html2canvas & SheetJS(XLSX) CDN -->
   <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
   
   <style>
     body { font-family: 'Pretendard', 'Malgun Gothic', sans-serif; }
-    /* 프린트 및 이미지 저장 시 스크롤바 숨김 */
     ::-webkit-scrollbar { width: 8px; height: 8px; }
     ::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 4px; }
-    
-    /* 커스텀 라디오 버튼 색상 강조 */
     input[type='radio'] { accent-color: #059669; }
   </style>
 </head>
 <body>
   <div id="root"></div>
 
+  <!-- React Code Area -->
   <script type="text/babel" data-type="module">
     import { initializeApp } from "https://www.gstatic.com/firebasejs/10.8.1/firebase-app.js";
     import { getAuth, signInWithCustomToken, signInAnonymously, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/10.8.1/firebase-auth.js";
-    import { getFirestore, doc, setDoc, updateDoc, onSnapshot, enableIndexedDbPersistence } from "https://www.gstatic.com/firebasejs/10.8.1/firebase-firestore.js";
+    import { getFirestore, doc, setDoc, updateDoc, onSnapshot } from "https://www.gstatic.com/firebasejs/10.8.1/firebase-firestore.js";
 
     const { useState, useEffect, useRef } = React;
 
@@ -50,17 +50,19 @@
     const db = getFirestore(app);
     const appId = typeof __app_id !== 'undefined' ? __app_id : 'sangjeong-grade-analyzer';
 
-    // 오프라인 모드 활성화 시도
-    try {
-      enableIndexedDbPersistence(db).catch((err) => {
-        console.warn("오프라인 캐시 활성화 안내:", err.code);
+    // 💡 완벽한 서버 동기화를 보장하기 위해 새 문서 사용
+    const DOC_ID = 'sangjeong_v13_sync';
+
+    // 🚨 모바일 통신 지연을 고려해 15초(15000ms)로 넉넉하게 대기합니다.
+    const withTimeout = (promise, ms, errorMessage) => {
+      let timeoutId;
+      const timeoutPromise = new Promise((_, reject) => {
+        timeoutId = setTimeout(() => reject(new Error(errorMessage)), ms);
       });
-    } catch(e) {}
+      return Promise.race([promise, timeoutPromise]).finally(() => clearTimeout(timeoutId));
+    };
 
-    // 💡 기존 데이터 유지를 위해 어제 쓰던 DB 이름(v11)을 그대로 사용합니다!
-    const DOC_ID = 'sangjeong_v11_final';
-
-    // 아이콘 SVG 컴포넌트
+    // 아이콘 SVG
     const Award = ({className}) => <svg className={className} xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="8" r="7"/><polyline points="8.21 13.89 7 23 12 20 17 23 15.79 13.88"/></svg>;
     const Info = ({className}) => <svg className={className} xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10"/><line x1="12" y1="16" x2="12" y2="12"/><line x1="12" y1="8" x2="12.01" y2="8"/></svg>;
     const Lock = ({className}) => <svg className={className} xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>;
@@ -136,7 +138,6 @@
 
       const [expectedPerf, setExpectedPerf] = useState(subject.expectedPerf !== undefined ? subject.expectedPerf : rp); 
 
-      // 부모 상태가 변경되면 동기화
       useEffect(() => {
         setTarget(subject.target || "");
         setPrevScore(subject.prevScore || "");
@@ -344,7 +345,6 @@
       const [text, setText] = useState(resolution);
       useEffect(() => setText(resolution), [resolution]);
       
-      // 이미지 저장 시 잘림 방지를 위해 텍스트 영역을 일반 div 블록으로 렌더링
       if (isCapturing) {
         return (
           <div className="w-full min-h-[6rem] p-3 rounded-lg border border-gray-300 bg-gray-50 leading-relaxed whitespace-pre-wrap text-gray-800 overflow-hidden text-sm">
@@ -386,10 +386,8 @@
       const [isCapturing, setIsCapturing] = useState(false);
       const fileInputRef = useRef(null);
 
-      // 에러 유발 방지를 위한 커스텀 모달(팝업창) 시스템
       const [modalConfig, setModalConfig] = useState(null);
 
-      // 무조건 눈에 띄는 대형 에러/완료 팝업 함수
       const showErrorModal = (message) => {
         setModalConfig({
           type: 'alert',
@@ -434,7 +432,6 @@
           if (snap.exists()) {
             setDocData(snap.data());
           } else {
-            // 완전 초기 데이터 세팅
             const initialData = { teacherPwd: null, students: {} };
             students.forEach(s => {
               initialData.students[s] = { pwd: null, exams: {} };
@@ -442,8 +439,6 @@
                 initialData.students[s].exams[e] = { subjects: [], resolution: "" };
               });
             });
-            
-            // 백그라운드에 병합 저장 (화면은 미리 띄워줌)
             setDocData(initialData); 
             setDoc(docRef, initialData, { merge: true }).catch(e => console.error(e));
           }
@@ -455,7 +450,6 @@
         return () => unsubscribe();
       }, [user]);
 
-      // 입력 시 에러 문구 지우기
       const handlePasswordChange = (e) => {
         setPasswordInput(e.target.value);
         if (loginError) setLoginError("");
@@ -466,28 +460,19 @@
         if (loginError) setLoginError("");
       };
 
-      // 에러 화면 렌더링 (도메인 미등록 등 보안 문제 발생 시)
       if (authError) {
         return (
           <div className="min-h-screen bg-red-50 flex flex-col items-center justify-center p-4 text-center font-sans">
             <div className="bg-white p-6 rounded-2xl shadow-xl w-full border border-red-200">
               <h1 className="text-xl font-bold text-red-600 mb-3 flex items-center justify-center gap-2">
-                <span className="text-2xl">⚠️</span> 보안 잠금 해제가 필요합니다!
+                <span className="text-2xl">⚠️</span> 보안 통신 오류!
               </h1>
               <p className="text-gray-700 mb-4 text-sm">
-                파이어베이스 데이터베이스가 현재 선생님의 웹사이트 주소를 인식하지 못해 접속을 차단했습니다.
+                파이어베이스 데이터베이스가 현재 기기 또는 와이파이에서 차단되었습니다.
               </p>
               <div className="bg-red-50 p-4 rounded-lg text-left border border-red-100 text-sm">
-                <h3 className="font-bold text-red-800 mb-2">🛠 해결 방법 (1분 소요):</h3>
-                <ol className="list-decimal pl-4 space-y-2 font-medium text-gray-800">
-                  <li><a href="https://console.firebase.google.com/" target="_blank" className="text-blue-600 hover:underline">파이어베이스 콘솔</a>에 접속합니다.</li>
-                  <li>왼쪽 메뉴에서 <b>Authentication(인증)</b> -> 상단 <b>설정(Settings)</b> 탭을 누릅니다.</li>
-                  <li><b>승인된 도메인(Authorized domains)</b> 항목을 찾아주세요.</li>
-                  <li><b>[도메인 추가]</b> 버튼을 누르고 아래의 주소를 복사해서 정확히 붙여넣어 주세요!<br/>
-                    <span className="font-bold text-red-600 bg-red-100 px-2 py-1 rounded inline-block mt-1 shadow-sm border border-red-300 select-all">{currentDomain}</span>
-                  </li>
-                  <li>추가 후 이 화면을 <b>새로고침</b> 하시면 정상 작동합니다!</li>
-                </ol>
+                <h3 className="font-bold text-red-800 mb-2">🛠 해결 방법:</h3>
+                <p className="text-gray-800 font-medium">학교 와이파이를 잠시 끄고 스마트폰 데이터(LTE/5G)를 켠 상태로 새로고침 해주세요.</p>
               </div>
               <p className="mt-4 text-xs text-gray-400 border-t pt-3">에러 코드: {authError.code || authError.message}</p>
             </div>
@@ -504,78 +489,67 @@
         );
       }
 
-      // --- 로그인 확인 로직 (💡 덮어쓰기 버그 완벽 제거 & 0.001초 접속) ---
-      const handleTeacherLogin = () => {
+      // --- 로그인 로직 ---
+      const handleTeacherLogin = async () => {
         setLoginError("");
-        if (!docData.teacherPwd) {
-          // 1. 최초 설정 시
-          if (!newPasswordInput) {
-            setLoginError("새로운 비밀번호를 입력해주세요.");
-            return;
-          }
-          const docRef = doc(db, 'artifacts', appId, 'public', 'data', 'class_data', DOC_ID);
-          // 즉시 로컬 데이터 변경 (await 없이 백그라운드 파이어베이스 저장)
-          setDoc(docRef, { teacherPwd: newPasswordInput }, { merge: true }).catch(console.error);
-          setCurrentUserRole('teacher');
-          setLoginMode(null);
-          setNewPasswordInput("");
-        } else {
-          // 2. 이미 설정된 비밀번호 확인
-          if (passwordInput === docData.teacherPwd) {
-            setCurrentUserRole('teacher');
-            setLoginMode(null);
-            setPasswordInput("");
+        try {
+          if (!docData.teacherPwd) {
+            if (!newPasswordInput) return setLoginError("새로운 비밀번호를 입력해주세요.");
+            
+            const docRef = doc(db, 'artifacts', appId, 'public', 'data', 'class_data', DOC_ID);
+            setDoc(docRef, { teacherPwd: newPasswordInput }, { merge: true }).catch(console.error);
+            
+            setCurrentUserRole('teacher'); setLoginMode(null); setNewPasswordInput("");
           } else {
-            setLoginError("비밀번호가 일치하지 않습니다. 다시 확인해주세요.");
+            if (passwordInput === docData.teacherPwd) {
+              setCurrentUserRole('teacher'); setLoginMode(null); setPasswordInput("");
+            } else {
+              setLoginError("비밀번호가 일치하지 않습니다. 다시 확인해주세요.");
+            }
+          }
+        } catch(e) { 
+          if(e.code === 'permission-denied') {
+            showErrorModal("🚨 파이어베이스 보안 규칙 오류!\n\n파이어베이스 콘솔 -> Firestore Database -> '규칙(Rules)' 탭으로 가셔서\n\nallow read, write: if true;\n\n로 변경하신 후 '게시(Publish)'를 눌러주세요!");
+          } else {
+            setLoginError("네트워크 오류 발생. 인터넷 연결을 확인하세요."); 
           }
         }
       };
 
-      const handleStudentLogin = () => {
+      const handleStudentLogin = async () => {
         setLoginError("");
-        if (!currentUserName) {
-          setLoginError("본인의 이름을 먼저 체크해주세요!");
-          return;
-        }
+        if (!currentUserName) return setLoginError("본인의 이름을 먼저 체크해주세요!");
         
         const studentData = (docData && docData.students && docData.students[currentUserName]) ? docData.students[currentUserName] : {};
         
-        if (!studentData.pwd) {
-          // 1. 학생 최초 비밀번호 설정 시
-          if (!/^\d{4}$/.test(newPasswordInput)) {
-            setLoginError("비밀번호는 반드시 숫자 4자리로만 입력해주세요.");
-            return;
-          }
-          const docRef = doc(db, 'artifacts', appId, 'public', 'data', 'class_data', DOC_ID);
-          
-          // 무한 대기 없이 백그라운드로 안전하게 전송 (오프라인 캐시 적용됨)
-          setDoc(docRef, {
-            students: {
-              [currentUserName]: { pwd: newPasswordInput }
-            }
-          }, { merge: true }).catch(console.error);
-          
-          setCurrentUserRole('student');
-          setLoginMode(null);
-          setNewPasswordInput("");
-        } else {
-          // 2. 기존 비밀번호 입력 시 (딜레이 0초 로컬 검사)
-          if (passwordInput === studentData.pwd) {
-            setCurrentUserRole('student');
-            setLoginMode(null);
-            setPasswordInput("");
+        try {
+          if (!studentData.pwd) {
+            if (!/^\d{4}$/.test(newPasswordInput)) return setLoginError("비밀번호는 반드시 숫자 4자리로만 입력해주세요.");
+            
+            const docRef = doc(db, 'artifacts', appId, 'public', 'data', 'class_data', DOC_ID);
+            setDoc(docRef, { students: { [currentUserName]: { pwd: newPasswordInput } } }, { merge: true }).catch(console.error);
+            
+            setCurrentUserRole('student'); setLoginMode(null); setNewPasswordInput("");
           } else {
-            setLoginError("비밀번호가 틀렸습니다. 다시 한번 확인해 주세요.");
+            if (passwordInput === studentData.pwd) {
+              setCurrentUserRole('student'); setLoginMode(null); setPasswordInput("");
+            } else {
+              setLoginError("비밀번호가 틀렸습니다. 다시 한번 확인해 주세요.");
+            }
+          }
+        } catch(e) { 
+          if(e.code === 'permission-denied') {
+            showErrorModal("🚨 데이터 저장 불가!\n선생님께 파이어베이스 '보안 규칙'이 잠겨있다고 말씀해주세요.");
+          } else {
+            setLoginError("네트워크 오류 발생. 인터넷 연결을 확인하세요."); 
           }
         }
       };
 
-      // --- LOGIN SCREEN ---
+      // --- LOGIN SCREEN UI ---
       if (!currentUserRole) {
         return (
           <div className="min-h-screen bg-emerald-50 flex flex-col items-center justify-center p-4">
-            
-            {/* 커스텀 안전 모달창 (에러 팝업을 무조건 화면 중앙에 띄웁니다) */}
             {modalConfig && (
               <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-[100] p-4">
                 <div className="bg-white rounded-2xl shadow-2xl p-6 w-full max-w-sm border-t-8 border-emerald-600">
@@ -584,37 +558,17 @@
                   </h3>
                   <p className="text-gray-700 mb-5 font-semibold leading-relaxed whitespace-pre-wrap text-sm">{modalConfig.message}</p>
                   {modalConfig.type === 'prompt' && (
-                    <input 
-                      type="text" 
-                      autoFocus
-                      className="w-full p-3 border border-gray-300 rounded-lg mb-4 outline-none focus:ring-2 focus:ring-emerald-500 font-bold text-gray-800 text-sm" 
-                      id="modalPromptInput"
-                      onKeyDown={(e) => {
-                        if (e.key === 'Enter') {
-                          e.preventDefault();
-                          modalConfig.onConfirm(e.target.value);
-                        }
-                      }}
-                    />
+                    <input type="text" autoFocus className="w-full p-3 border border-gray-300 rounded-lg mb-4 outline-none focus:ring-2 focus:ring-emerald-500 font-bold text-gray-800 text-sm" id="modalPromptInput" onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); modalConfig.onConfirm(e.target.value); } }} />
                   )}
                   <div className="flex justify-end gap-2">
-                    {modalConfig.type !== 'alert' && (
-                      <button type="button" onClick={modalConfig.onCancel} className="px-4 py-2 text-gray-600 font-bold hover:bg-gray-100 rounded-lg transition text-sm">취소</button>
-                    )}
-                    <button type="button" onClick={() => {
-                      if (modalConfig.type === 'prompt') {
-                        modalConfig.onConfirm(document.getElementById('modalPromptInput').value);
-                      } else {
-                        modalConfig.onConfirm();
-                      }
-                    }} className="px-5 py-2 bg-emerald-600 text-white font-bold rounded-lg hover:bg-emerald-700 transition shadow-md text-sm">확인</button>
+                    {modalConfig.type !== 'alert' && <button type="button" onClick={modalConfig.onCancel} className="px-4 py-2 text-gray-600 font-bold hover:bg-gray-100 rounded-lg transition text-sm">취소</button>}
+                    <button type="button" onClick={() => { modalConfig.type === 'prompt' ? modalConfig.onConfirm(document.getElementById('modalPromptInput').value) : modalConfig.onConfirm(); }} className="px-5 py-2 bg-emerald-600 text-white font-bold rounded-lg hover:bg-emerald-700 transition shadow-md text-sm">확인</button>
                   </div>
                 </div>
               </div>
             )}
 
             <div className="bg-white rounded-3xl shadow-xl overflow-hidden w-full max-w-sm relative">
-              {/* 🚨 화면 덮기 애니메이션 (서버 작업 시에만 뜹니다) */}
               {isLoggingIn && (
                 <div className="absolute inset-0 bg-white/80 backdrop-blur-sm flex flex-col items-center justify-center z-50">
                    <svg className="animate-spin w-8 h-8 text-emerald-600 mb-3" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path></svg>
@@ -624,7 +578,7 @@
 
               <div className="bg-emerald-600 p-6 text-center text-white">
                 <Award className="w-10 h-10 mx-auto mb-3" />
-                <h1 className="text-xl font-bold mb-1">상정중 3-1 성적 프로젝트 <span className="text-xs text-yellow-300 ml-1 font-black">v12.0</span></h1>
+                <h1 className="text-xl font-bold mb-1">상정중 3-1 성적 프로젝트 <span className="text-xs text-yellow-300 ml-1 font-black">v13.0</span></h1>
                 <p className="text-emerald-100 text-sm">아름샘이 항상 응원해! 💪✨</p>
               </div>
               <div className="p-6">
@@ -641,22 +595,22 @@
                     {!docData.teacherPwd ? (
                       <>
                         <p className="text-xs text-blue-600 text-center font-bold">최초 접속입니다. 관리자 비밀번호를 설정해주세요.</p>
-                        <input type="password" value={newPasswordInput} onChange={handleNewPasswordChange} onKeyDown={(e) => { if(e.key === 'Enter') { e.preventDefault(); document.getElementById('teacherNewLoginBtn').click(); } }} placeholder="새 비밀번호 입력" className="w-full p-3 border rounded-lg focus:ring-2 focus:ring-blue-500 outline-none text-sm" />
+                        <input type="password" value={newPasswordInput} onChange={handleNewPasswordChange} onKeyDown={(e) => { if(e.key === 'Enter') { e.preventDefault(); handleTeacherLogin(); } }} placeholder="새 비밀번호 입력" className="w-full p-3 border rounded-lg focus:ring-2 focus:ring-blue-500 outline-none text-sm" />
                       </>
                     ) : (
-                      <input type="password" value={passwordInput} onChange={handlePasswordChange} onKeyDown={(e) => { if(e.key === 'Enter') { e.preventDefault(); document.getElementById('teacherLoginBtn').click(); } }} placeholder="비밀번호 입력" className="w-full p-3 border rounded-lg focus:ring-2 focus:ring-emerald-500 outline-none text-sm" />
+                      <input type="password" value={passwordInput} onChange={handlePasswordChange} onKeyDown={(e) => { if(e.key === 'Enter') { e.preventDefault(); handleTeacherLogin(); } }} placeholder="비밀번호 입력" className="w-full p-3 border rounded-lg focus:ring-2 focus:ring-emerald-500 outline-none text-sm" />
                     )}
                     
                     {loginError && <p className="text-red-500 font-bold text-xs text-center animate-pulse">{loginError}</p>}
                     
-                    <button id={!docData.teacherPwd ? "teacherNewLoginBtn" : "teacherLoginBtn"} type="button" onClick={handleTeacherLogin} className="w-full py-3 text-white rounded-lg font-bold transition bg-emerald-600 hover:bg-emerald-700 text-sm">로그인</button>
+                    <button type="button" onClick={handleTeacherLogin} className="w-full py-3 text-white rounded-lg font-bold transition bg-emerald-600 hover:bg-emerald-700 text-sm">로그인</button>
                     <button type="button" onClick={() => { setLoginMode(null); setLoginError(""); }} className="w-full py-2 text-gray-500 font-semibold text-xs">돌아가기</button>
                     
                     {(docData && docData.teacherPwd) && (
                       <button type="button" onClick={() => setModalConfig({ 
                         type: 'prompt', 
                         title: '관리자 비밀번호 초기화', 
-                        message: '보안을 위해 [초기화 마스터 코드]를 입력하세요.\n(마스터 코드는 선생님만 알고 계셔야 합니다.)', 
+                        message: '보안을 위해 [초기화 마스터 코드]를 입력하세요.\n(마스터 코드는 선생님만 알고 계십니다.)', 
                         onConfirm: async (code) => {
                           if(code === "상정중") {
                             setModalConfig(null);
@@ -676,16 +630,12 @@
                   <div className="space-y-4">
                     <h2 className="text-lg font-bold text-center text-gray-800 flex items-center justify-center gap-2"><User className="w-4 h-4"/> 학생 선택</h2>
                     
-                    {/* 💡 새로운 라디오 버튼 명렬표 (명확한 체크 강제) */}
                     <div className="w-full border rounded-lg max-h-56 overflow-y-auto bg-white custom-scrollbar shadow-inner text-left">
                       {students.map(s => (
                         <label key={s} className={`flex items-center justify-between p-3 border-b border-gray-100 cursor-pointer transition ${currentUserName === s ? 'bg-emerald-50' : 'hover:bg-gray-50'}`}>
                           <span className={`font-bold text-sm ${currentUserName === s ? 'text-emerald-700' : 'text-gray-700'}`}>{s}</span>
                           <input 
-                            type="radio" 
-                            name="studentSelect" 
-                            value={s} 
-                            checked={currentUserName === s} 
+                            type="radio" name="studentSelect" value={s} checked={currentUserName === s} 
                             onChange={(e) => { setCurrentUserName(e.target.value); setPasswordInput(""); setNewPasswordInput(""); setLoginError(""); }} 
                             className="w-5 h-5 accent-emerald-600 cursor-pointer"
                           />
@@ -696,21 +646,17 @@
                     {currentUserName && !(docData && docData.students && docData.students[currentUserName] && docData.students[currentUserName].pwd) && (
                       <div className="p-4 bg-yellow-50 rounded-lg border border-yellow-200">
                         <p className="text-xs text-yellow-800 font-semibold mb-2">최초 접속입니다. <span className="text-red-500">숫자 4자리</span>로 설정하세요.</p>
-                        <input type="password" maxLength="4" value={newPasswordInput} onChange={handleNewPasswordChange} onKeyDown={(e) => { if(e.key === 'Enter') { e.preventDefault(); document.getElementById('studentNewLoginBtn').click(); } }} placeholder="숫자 4자리" className="w-full p-3 border border-yellow-300 rounded-lg text-center tracking-widest text-lg font-bold mb-3 outline-none focus:ring-2 focus:ring-yellow-500" />
-                        
+                        <input type="password" maxLength="4" value={newPasswordInput} onChange={handleNewPasswordChange} onKeyDown={(e) => { if(e.key === 'Enter') { e.preventDefault(); handleStudentLogin(); } }} placeholder="숫자 4자리" className="w-full p-3 border border-yellow-300 rounded-lg text-center tracking-widest text-lg font-bold mb-3 outline-none focus:ring-2 focus:ring-yellow-500" />
                         {loginError && <p className="text-red-500 font-bold text-xs mb-2 text-center animate-pulse">{loginError}</p>}
-                        
-                        <button id="studentNewLoginBtn" type="button" onClick={handleStudentLogin} className="w-full py-3 text-white rounded-lg font-bold transition bg-yellow-500 hover:bg-yellow-600 text-sm shadow-md">비밀번호 설정 및 시작</button>
+                        <button type="button" onClick={handleStudentLogin} className="w-full py-3 text-white rounded-lg font-bold transition bg-yellow-500 hover:bg-yellow-600 text-sm shadow-md">비밀번호 설정 및 시작</button>
                       </div>
                     )}
                     
                     {currentUserName && (docData && docData.students && docData.students[currentUserName] && docData.students[currentUserName].pwd) && (
                       <>
-                        <input type="password" value={passwordInput} onChange={handlePasswordChange} onKeyDown={(e) => { if(e.key === 'Enter') { e.preventDefault(); document.getElementById('studentLoginBtn').click(); } }} placeholder="비밀번호 입력" className="w-full p-3 border rounded-lg outline-none text-center tracking-widest text-lg focus:ring-2 focus:ring-emerald-500" />
-                        
+                        <input type="password" value={passwordInput} onChange={handlePasswordChange} onKeyDown={(e) => { if(e.key === 'Enter') { e.preventDefault(); handleStudentLogin(); } }} placeholder="비밀번호 입력" className="w-full p-3 border rounded-lg outline-none text-center tracking-widest text-lg focus:ring-2 focus:ring-emerald-500" />
                         {loginError && <p className="text-red-500 font-bold text-xs mb-2 text-center animate-pulse">{loginError}</p>}
-                        
-                        <button id="studentLoginBtn" type="button" onClick={handleStudentLogin} className="w-full py-3 text-white rounded-lg font-bold transition bg-emerald-600 hover:bg-emerald-700 text-sm shadow-md">로그인</button>
+                        <button type="button" onClick={handleStudentLogin} className="w-full py-3 text-white rounded-lg font-bold transition bg-emerald-600 hover:bg-emerald-700 text-sm shadow-md">로그인</button>
                       </>
                     )}
                     <button type="button" onClick={() => { setLoginMode(null); setLoginError(""); setCurrentUserName(""); }} className="w-full py-2 text-gray-500 font-semibold text-xs">돌아가기</button>
@@ -722,7 +668,7 @@
         );
       }
 
-      // --- DASHBOARD ---
+      // --- DASHBOARD UI ---
       const activeStudent = currentUserRole === 'teacher' ? selectedStudentForTeacher : currentUserName;
       const activeStudentData = docData && docData.students && docData.students[activeStudent] && docData.students[activeStudent].exams ? docData.students[activeStudent].exams[selectedExam] : null;
       
@@ -747,7 +693,6 @@
       });
 
       const activeResolution = activeStudentData && activeStudentData.resolution ? activeStudentData.resolution : "";
-
       const isSemesterFinal = selectedExam.includes("학기말");
       const isFirstExam = selectedExam.includes("1차시험");
       const isSecondExam = selectedExam.includes("2차시험");
@@ -761,12 +706,7 @@
       });
 
       const handleLogout = () => {
-        setCurrentUserRole(null);
-        setCurrentUserName("");
-        setPasswordInput("");
-        setNewPasswordInput("");
-        setLoginMode(null);
-        setLoginError("");
+        setCurrentUserRole(null); setCurrentUserName(""); setPasswordInput(""); setNewPasswordInput(""); setLoginMode(null); setLoginError("");
       };
 
       const handleTeacherPwdChange = () => {
@@ -777,21 +717,15 @@
           onConfirm: async (newPwd) => {
             if (newPwd) {
               setModalConfig(null);
-              setIsLoggingIn(true);
               const docRef = doc(db, 'artifacts', appId, 'public', 'data', 'class_data', DOC_ID);
-              // 백그라운드 저장으로 즉시 성공 처리
               setDoc(docRef, { teacherPwd: newPwd }, { merge: true }).catch(console.error);
-              setIsLoggingIn(false);
               showSuccessModal("관리자 비밀번호가 성공적으로 변경되었습니다.");
-            } else {
-              setModalConfig(null);
-            }
+            } else { setModalConfig(null); }
           },
           onCancel: () => setModalConfig(null)
         });
       };
 
-      // 학생 비밀번호 초기화 전용 함수 (선생님만 사용 가능)
       const handleResetStudentPwd = () => {
         setModalConfig({
           type: 'confirm',
@@ -799,114 +733,85 @@
           message: `${selectedStudentForTeacher} 학생의 비밀번호를 '0000'으로 초기화하시겠습니까?`,
           onConfirm: async () => {
             setModalConfig(null); 
-            setIsLoggingIn(true);
             const docRef = doc(db, 'artifacts', appId, 'public', 'data', 'class_data', DOC_ID);
             setDoc(docRef, {
               students: {
                 [selectedStudentForTeacher]: { pwd: "0000" }
               }
             }, { merge: true }).catch(console.error);
-            setIsLoggingIn(false);
             showSuccessModal(`${selectedStudentForTeacher} 학생의 비밀번호가 '0000'으로 초기화되었습니다.`);
           },
           onCancel: () => setModalConfig(null)
         });
       };
 
-      // 💡 핵심 버그 해결: 덮어쓰기 현상을 원천 차단하는 완벽한 저장 함수
-      const updateStudentData = (studentName, exam, field, value) => {
-        // 1. 즉시 로컬 화면(React State)부터 딜레이 없이 업데이트 시킵니다.
+      const updateStudentData = async (studentName, exam, field, value) => {
         setDocData(prevData => {
             if (!prevData) return prevData;
-            // 완벽한 복사본(Deep Copy) 생성
             const newData = JSON.parse(JSON.stringify(prevData));
-            
-            // 데이터 안전 껍데기 생성
             if (!newData.students[studentName]) newData.students[studentName] = { exams: {} };
             if (!newData.students[studentName].exams[exam]) newData.students[studentName].exams[exam] = {};
-            
-            // 데이터 교체
             newData.students[studentName].exams[exam][field] = value;
-            
-            // 2. 가장 최신의 완벽한 데이터로 서버에 백그라운드 덮어쓰기 지시
-            const docRef = doc(db, 'artifacts', appId, 'public', 'data', 'class_data', DOC_ID);
-            setDoc(docRef, {
-                students: {
-                    [studentName]: {
-                        exams: {
-                            [exam]: {
-                                [field]: value
-                            }
-                        }
-                    }
-                }
-            }, { merge: true }).catch(console.error);
-            
-            return newData; // 화면에 즉시 표시
+            return newData;
         });
+
+        try {
+          const docRef = doc(db, 'artifacts', appId, 'public', 'data', 'class_data', DOC_ID);
+          await setDoc(docRef, { students: { [studentName]: { exams: { [exam]: { [field]: value } } } } }, { merge: true });
+        } catch(e) { console.error("Auto-save failed", e); }
       };
 
       const handleSubjectChange = (subjectName, field, value) => {
         const activeStudent = currentUserRole === 'teacher' ? selectedStudentForTeacher : currentUserName;
+        let currentSubjects = [...(docData.students[activeStudent]?.exams[selectedExam]?.subjects || [])];
+        const isSem2 = selectedExam.includes("2학기");
+        const currentFixedSubjects = isSem2 ? FIXED_SUBJECTS_SEM2 : FIXED_SUBJECTS_SEM1;
         
-        // 로컬 최신 데이터를 기반으로 배열 교체 작업
-        setDocData(prevData => {
-            if (!prevData) return prevData;
-            const newData = JSON.parse(JSON.stringify(prevData));
-            
-            if (!newData.students[activeStudent]) newData.students[activeStudent] = { exams: {} };
-            if (!newData.students[activeStudent].exams[selectedExam]) newData.students[activeStudent].exams[selectedExam] = { subjects: [] };
-            
-            let currentSubjects = newData.students[activeStudent].exams[selectedExam].subjects || [];
-            const isSem2 = selectedExam.includes("2학기");
-            const currentFixedSubjects = isSem2 ? FIXED_SUBJECTS_SEM2 : FIXED_SUBJECTS_SEM1;
-            
-            const index = currentSubjects.findIndex(s => s.name === subjectName);
-            if (index >= 0) {
-                currentSubjects[index][field] = value;
-            } else {
-                const fixedSub = currentFixedSubjects.find(s => s.name === subjectName);
-                currentSubjects.push({
-                    id: Date.now() + Math.random(),
-                    name: subjectName,
-                    ratio1: fixedSub.ratio1,
-                    ratio2: fixedSub.ratio2,
-                    ratioPerf: fixedSub.ratioPerf,
-                    target: "", score: "", prevScore: "", score1: "", score2: "", scorePerf: "", expectedPerf: fixedSub.ratioPerf,
-                    [field]: value
-                });
-            }
-            
-            newData.students[activeStudent].exams[selectedExam].subjects = currentSubjects;
-            
-            // 파이어베이스에 안전한 배열 전송
-            const docRef = doc(db, 'artifacts', appId, 'public', 'data', 'class_data', DOC_ID);
-            setDoc(docRef, {
-                students: { [activeStudent]: { exams: { [selectedExam]: { subjects: currentSubjects } } } }
-            }, { merge: true }).catch(console.error);
-
-            return newData;
+        const index = currentSubjects.findIndex(s => s.name === subjectName);
+        if (index >= 0) {
+            currentSubjects[index][field] = value;
+        } else {
+            const fixedSub = currentFixedSubjects.find(s => s.name === subjectName);
+            currentSubjects.push({ id: Date.now(), name: subjectName, ratio1: fixedSub.ratio1, ratio2: fixedSub.ratio2, ratioPerf: fixedSub.ratioPerf, target: "", score: "", prevScore: "", score1: "", score2: "", scorePerf: "", expectedPerf: fixedSub.ratioPerf, [field]: value });
+        }
+        
+        setDocData(prev => {
+          const newData = JSON.parse(JSON.stringify(prev));
+          if (!newData.students[activeStudent]) newData.students[activeStudent] = { exams: {} };
+          if (!newData.students[activeStudent].exams[selectedExam]) newData.students[activeStudent].exams[selectedExam] = { subjects: [] };
+          newData.students[activeStudent].exams[selectedExam].subjects = currentSubjects;
+          return newData;
         });
+
+        const docRef = doc(db, 'artifacts', appId, 'public', 'data', 'class_data', DOC_ID);
+        setDoc(docRef, { students: { [activeStudent]: { exams: { [selectedExam]: { subjects: currentSubjects } } } } }, { merge: true }).catch(console.error);
       };
 
-      // 💡 [확실하게 저장하기] 전용 함수: 완료 알림 띄워주기
       const handleSaveScores = async () => {
         setIsLoggingIn(true);
-        // 밀려있던 입력(Blur)들이 서버로 넘어갈 시간을 0.8초 정도 기다려줍니다.
-        await new Promise(resolve => setTimeout(resolve, 800));
-        setIsLoggingIn(false);
-        showSuccessModal("입력하신 모든 성적과 다짐이 서버에 안전하게 저장되었습니다!\n\n이제 안심하고 로그아웃을 누르시거나 창을 닫으셔도 됩니다.");
+        try {
+          const studentData = docData.students[activeStudent];
+          const docRef = doc(db, 'artifacts', appId, 'public', 'data', 'class_data', DOC_ID);
+          
+          await withTimeout(setDoc(docRef, { students: { [activeStudent]: studentData } }, { merge: true }), 15000, "서버 연결 지연");
+          
+          setIsLoggingIn(false);
+          showSuccessModal("서버에 완벽하게 저장되었습니다!\n\n이제 선생님 기기에서도 즉시 확인할 수 있습니다.");
+        } catch(e) {
+          setIsLoggingIn(false);
+          if (e.code === 'permission-denied' || (e.message && e.message.includes('permission'))) {
+            showErrorModal("🚨 저장 실패! (보안 규칙 문제)\n\n파이어베이스 콘솔 -> Firestore Database -> '규칙(Rules)' 탭으로 가셔서 코드를\nallow read, write: if true;\n로 변경하시고 [게시]를 눌러야만 서버에 저장됩니다!");
+          } else {
+            showErrorModal("저장 실패: 인터넷 연결을 확인해주세요.\n(" + e.message + ")");
+          }
+        }
       };
 
-      // 엑셀 일괄 업로드 함수
       const handleBulkFileUpload = async (e) => {
         const file = e.target.files[0];
         if (!file) return;
 
-        if (typeof window.XLSX === 'undefined') {
-          showErrorModal("엑셀 기능 로딩 중입니다. 잠시 후 다시 시도해주세요.");
-          return;
-        }
+        if (typeof window.XLSX === 'undefined') return showErrorModal("엑셀 기능 로딩 중입니다. 잠시 후 다시 시도해주세요.");
 
         const reader = new FileReader();
         reader.onload = async (evt) => {
@@ -917,11 +822,7 @@
             const ws = wb.Sheets[wb.SheetNames[0]];
             const data = window.XLSX.utils.sheet_to_json(ws, { header: 1 });
             
-            if (data.length < 2) {
-              showErrorModal("데이터가 부족합니다. 양식을 확인해주세요.");
-              setIsLoggingIn(false);
-              return;
-            }
+            if (data.length < 2) { showErrorModal("데이터가 부족합니다. 양식을 확인해주세요."); setIsLoggingIn(false); return; }
 
             const headers = data[0];
             const updates = { students: {} };
@@ -940,42 +841,29 @@
                 existingSubjects.forEach(s => newSubjectsMap.set(s.name, { ...s }));
                 
                 for (let j = 1; j < headers.length; j++) {
-                  const rawHeader = headers[j];
-                  if (!rawHeader) continue;
-                  
-                  const scoreVal = row[j];
-                  if (scoreVal === undefined || scoreVal === null || isNaN(Number(scoreVal))) continue;
-                  const rawScore = Number(scoreVal);
+                  if (!headers[j] || row[j] === undefined || isNaN(Number(row[j]))) continue;
+                  const rawScore = Number(row[j]);
                   
                   if (isSemesterFinal) {
-                    const parts = String(rawHeader).trim().split('_');
+                    const parts = String(headers[j]).trim().split('_');
                     const subjName = parts[0];
                     const type = parts[1]; 
-                    
                     if(!validSubjectNames.includes(subjName)) continue;
 
-                    if (!newSubjectsMap.has(subjName)) {
-                       const fixedSub = currentFixedSubjects.find(s => s.name === subjName);
-                       newSubjectsMap.set(subjName, { id: Date.now() + Math.random(), name: subjName, ratio1: fixedSub.ratio1, ratio2: fixedSub.ratio2, ratioPerf: fixedSub.ratioPerf });
-                    }
+                    if (!newSubjectsMap.has(subjName)) newSubjectsMap.set(subjName, { id: Date.now() + Math.random(), name: subjName, ratio1: currentFixedSubjects.find(s => s.name === subjName).ratio1, ratio2: currentFixedSubjects.find(s => s.name === subjName).ratio2, ratioPerf: currentFixedSubjects.find(s => s.name === subjName).ratioPerf });
                     let subjObj = newSubjectsMap.get(subjName);
                     if (type === '1차') subjObj.score1 = Math.max(0, Math.min(100, rawScore));
                     else if (type === '2차') subjObj.score2 = Math.max(0, Math.min(100, rawScore));
                     else if (type === '수행') subjObj.scorePerf = Math.max(0, Math.min(subjObj.ratioPerf, rawScore)); 
                     else subjObj.score1 = Math.max(0, Math.min(100, rawScore)); 
                   } else {
-                    const subjName = String(rawHeader).trim();
+                    const subjName = String(headers[j]).trim();
                     if(!validSubjectNames.includes(subjName)) continue;
 
-                    if (!newSubjectsMap.has(subjName)) {
-                       const fixedSub = currentFixedSubjects.find(s => s.name === subjName);
-                       newSubjectsMap.set(subjName, { id: Date.now() + Math.random(), name: subjName, ratio1: fixedSub.ratio1, ratio2: fixedSub.ratio2, ratioPerf: fixedSub.ratioPerf, target: "", score: "", expectedPerf: fixedSub.ratioPerf });
-                    }
-                    let subjObj = newSubjectsMap.get(subjName);
-                    subjObj.score = Math.max(0, Math.min(100, rawScore));
+                    if (!newSubjectsMap.has(subjName)) newSubjectsMap.set(subjName, { id: Date.now() + Math.random(), name: subjName, ratio1: currentFixedSubjects.find(s => s.name === subjName).ratio1, ratio2: currentFixedSubjects.find(s => s.name === subjName).ratio2, ratioPerf: currentFixedSubjects.find(s => s.name === subjName).ratioPerf, target: "", score: "", expectedPerf: currentFixedSubjects.find(s => s.name === subjName).ratioPerf });
+                    newSubjectsMap.get(subjName).score = Math.max(0, Math.min(100, rawScore));
                   }
                 }
-                
                 const newSubjectsArray = Array.from(newSubjectsMap.values());
                 if(newSubjectsArray.length > 0) {
                   if(!updates.students[studentName]) updates.students[studentName] = { exams: {} };
@@ -986,17 +874,19 @@
 
             if (Object.keys(updates.students).length > 0) {
               const docRef = doc(db, 'artifacts', appId, 'public', 'data', 'class_data', DOC_ID);
-              // 백그라운드 갱신
-              setDoc(docRef, updates, { merge: true }).catch(console.error);
+              await withTimeout(setDoc(docRef, updates, { merge: true }), 15000, "서버 저장 지연");
               showSuccessModal(`${Object.keys(updates.students).length}명 학생의 성적이 엑셀로부터 성공적으로 등록되었습니다!`);
             } else {
               showErrorModal("엑셀 파일에 유효한 학생 데이터가 없습니다.\n양식을 다시 확인해주세요.");
             }
           } catch (error) {
-            console.error(error);
-            showErrorModal("파일 처리 중 오류가 발생했습니다.");
+            if(error.code === 'permission-denied') {
+              showErrorModal("🚨 업로드 불가 (보안 규칙 오류)\n\n파이어베이스 '규칙(Rules)' 탭에서\nallow read, write: if true;\n로 변경해야만 합니다!");
+            } else {
+              showErrorModal("파일 처리 중 오류가 발생했습니다.");
+            }
           } finally {
-            setIsLoggingIn(false); // 애니메이션 종료
+            setIsLoggingIn(false);
           }
         };
         reader.readAsBinaryString(file);
@@ -1004,10 +894,7 @@
       };
 
       const handleDownloadImage = () => {
-        if (typeof window.html2canvas === 'undefined') {
-          showErrorModal("이미지 저장 기능을 불러오는 중입니다. 잠시 후 다시 시도해주세요.");
-          return;
-        }
+        if (typeof window.html2canvas === 'undefined') return showErrorModal("이미지 저장 기능을 불러오는 중입니다. 잠시 후 다시 시도해주세요.");
         
         window.scrollTo(0, 0);
         setIsCapturing(true); 
@@ -1015,12 +902,7 @@
         setTimeout(async () => {
           const element = document.getElementById('capture-area');
           try {
-            const canvas = await window.html2canvas(element, { 
-              scale: 2, 
-              backgroundColor: '#f0fdf4',
-              useCORS: true,
-              scrollY: -window.scrollY
-            });
+            const canvas = await window.html2canvas(element, { scale: 2, backgroundColor: '#f0fdf4', useCORS: true, scrollY: -window.scrollY });
             const link = document.createElement('a');
             link.download = `${activeStudent}_${selectedExam}_분석결과.png`;
             link.href = canvas.toDataURL('image/png');
@@ -1038,7 +920,6 @@
       return (
         <div className="min-h-screen bg-emerald-50 py-8 px-4 font-sans text-gray-800 relative">
           
-          {/* 통신 중 화면 덮기 애니메이션 (데이터 전송 시) */}
           {isLoggingIn && currentUserRole && (
             <div className="fixed inset-0 bg-white/70 backdrop-blur-sm flex flex-col items-center justify-center z-[200]">
                <svg className="animate-spin w-12 h-12 text-emerald-600 mb-3" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path></svg>
@@ -1046,7 +927,6 @@
             </div>
           )}
 
-          {/* 커스텀 안전 모달창 (에러 팝업을 무조건 화면 중앙에 띄웁니다) */}
           {modalConfig && (
             <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-[300] p-4">
               <div className="bg-white rounded-2xl shadow-2xl p-6 w-full max-w-sm border-t-8 border-emerald-600">
@@ -1214,14 +1094,14 @@
                   </section>
                 )}
 
-                {/* 💡 [핵심 추가] 학생들을 위한 명시적인 저장하기 버튼 박스 */}
                 {!isCapturing && currentUserRole === 'student' && !isSemesterFinal && (
                   <div className="mt-8 bg-emerald-100 p-6 md:p-8 rounded-2xl flex flex-col items-center justify-center border border-emerald-300 shadow-md">
-                      <h3 className="text-emerald-800 font-bold text-lg md:text-xl mb-2 flex items-center gap-2"><SaveIcon className="w-6 h-6"/> 성적 입력 완료하기</h3>
-                      <p className="text-emerald-700 text-sm md:text-base font-semibold text-center mb-5">입력하신 점수와 다짐은 자동으로 임시 저장되지만, <br className="md:hidden"/><b>안전을 위해 마지막에 꼭 아래 버튼을 눌러주세요!</b></p>
+                      <h3 className="text-emerald-800 font-bold text-lg md:text-xl mb-2 flex items-center gap-2"><SaveIcon className="w-6 h-6"/> 성적 저장 완료하기</h3>
+                      <p className="text-emerald-700 text-sm md:text-base font-semibold text-center mb-5">입력하신 점수는 임시 저장 상태입니다. <br className="md:hidden"/><b>선생님께 제출하려면 꼭 아래 버튼을 눌러주세요!</b></p>
                       <button type="button" onClick={handleSaveScores} className="w-full md:w-auto px-8 py-4 bg-emerald-600 hover:bg-emerald-700 text-white font-bold rounded-xl shadow-lg flex items-center justify-center gap-2 text-lg transition-transform transform active:scale-95">
-                          확실하게 저장하고 완료하기
+                          확실하게 서버로 전송하기
                       </button>
+                      <p className="text-emerald-600 text-xs mt-3 text-center opacity-80">(저장 실패 오류가 뜨면, 선생님께 말씀드려 파이어베이스 규칙을 수정해야 합니다)</p>
                   </div>
                 )}
 
