@@ -121,7 +121,9 @@
       return 'E';
     };
 
-    const StandardRow = ({ subject, isFirstExam, isSecondExam, isSem1Exam1, onUpdate, isCapturing }) => {
+    const formatScore = (s) => Number.isInteger(s) ? s : s.toFixed(1);
+
+    const StandardRow = ({ subject, isFirstExam, isSecondExam, isSem1Exam1, onUpdate, isCapturing, currentUserRole }) => {
       const [target, setTarget] = useState(subject.target !== undefined ? subject.target : "");
       const [prevScore, setPrevScore] = useState(subject.prevScore !== undefined ? subject.prevScore : ""); 
       const [score, setScore] = useState(subject.score !== undefined ? subject.score : ""); 
@@ -178,56 +180,52 @@
             { grade: 'D', total: 60 }
           ];
 
-          let previousMin = r2 > 0 ? 101 : rp + 1;
+          let previousMin = r2 > 0 ? 100.1 : rp + 0.1;
           const examType = r2 > 0 ? "2차" : "수행";
-          let isHighestGrade = true; // 💡 달성 가능한 가장 높은 등급인지 확인하는 변수 추가
+          let isHighestGrade = true;
 
-          // A부터 D까지 각 등급별 정확한 점수 구간 계산 알고리즘
           gradeTargets.forEach(target => {
             const pointsNeeded = target.total - currentAcquired;
             const neededFrom2nd = pointsNeeded - perfAcquired;
             
             if (r2 > 0) {
               const reqScoreRaw = neededFrom2nd / (r2 / 100);
-              const minScore = Math.max(0, Math.ceil(reqScoreRaw));
-              const maxScore = Math.min(100, previousMin - 1);
+              const minScore = Math.max(0, Math.ceil(reqScoreRaw * 10) / 10);
+              const maxScore = Math.min(100, Math.round((previousMin - 0.1) * 10) / 10);
               
               if (minScore <= 100 && minScore <= maxScore) {
                 if (isHighestGrade) {
-                  // 💡 가장 높은 등급은 상한선 없이 "이상 필요" 출력
                   targetElements.push(
                     <div key={target.grade} className={`font-bold text-[11px] md:text-[12px] leading-snug ${gradeColors[target.grade]}`}>
-                      {target.grade}등급을 위해 {examType} {minScore}점 이상 필요
-                    </div>
-                  );
-                  isHighestGrade = false; // 첫 번째(가장 높은) 등급 처리 후 false로 변경
-                } else {
-                  // 💡 그 밑의 등급들은 구간(점수~점수) 출력
-                  targetElements.push(
-                    <div key={target.grade} className={`font-bold text-[11px] md:text-[12px] leading-snug ${gradeColors[target.grade]}`}>
-                      {target.grade}등급을 위해 {examType} {minScore}점~{maxScore}점 필요
-                    </div>
-                  );
-                }
-                previousMin = minScore;
-              }
-            } else {
-              // 2차가 없는 과목 (수행 100%) 처리
-              const minPerf = Math.max(0, Math.ceil(pointsNeeded));
-              const maxPerf = Math.min(rp, previousMin - 1);
-              
-              if (minPerf <= rp && minPerf <= maxPerf) {
-                if (isHighestGrade) {
-                  targetElements.push(
-                    <div key={target.grade} className={`font-bold text-[11px] md:text-[12px] leading-snug ${gradeColors[target.grade]}`}>
-                      {target.grade}등급을 위해 {examType} {minPerf}점 이상 필요
+                      {target.grade}등급을 위해 {examType} {formatScore(minScore)}점 이상 필요
                     </div>
                   );
                   isHighestGrade = false;
                 } else {
                   targetElements.push(
                     <div key={target.grade} className={`font-bold text-[11px] md:text-[12px] leading-snug ${gradeColors[target.grade]}`}>
-                      {target.grade}등급을 위해 {examType} {minPerf}점~{maxPerf}점 필요
+                      {target.grade}등급을 위해 {examType} {formatScore(minScore)}점~{formatScore(maxScore)}점 필요
+                    </div>
+                  );
+                }
+                previousMin = minScore;
+              }
+            } else {
+              const minPerf = Math.max(0, Math.ceil(pointsNeeded * 10) / 10);
+              const maxPerf = Math.min(rp, Math.round((previousMin - 0.1) * 10) / 10);
+              
+              if (minPerf <= rp && minPerf <= maxPerf) {
+                if (isHighestGrade) {
+                  targetElements.push(
+                    <div key={target.grade} className={`font-bold text-[11px] md:text-[12px] leading-snug ${gradeColors[target.grade]}`}>
+                      {target.grade}등급을 위해 {examType} {formatScore(minPerf)}점 이상 필요
+                    </div>
+                  );
+                  isHighestGrade = false;
+                } else {
+                  targetElements.push(
+                    <div key={target.grade} className={`font-bold text-[11px] md:text-[12px] leading-snug ${gradeColors[target.grade]}`}>
+                      {target.grade}등급을 위해 {examType} {formatScore(minPerf)}점~{formatScore(maxPerf)}점 필요
                     </div>
                   );
                 }
@@ -272,7 +270,7 @@
               {isSkipped || r1 === 0 ? <div className="text-center text-gray-400 text-xs font-bold">미실시</div> : (
                 <div className="flex justify-center items-center">
                   {!isCapturing ? (
-                    <input type="number" value={prevScore} onChange={(e) => setPrevScore(e.target.value)} onBlur={() => handleBlur('prevScore', prevScore, setPrevScore)} placeholder="1차" className="w-12 px-1 py-1 text-center border rounded bg-transparent font-bold text-gray-700 outline-none text-sm" />
+                    <input type="number" step="any" disabled={currentUserRole === 'student'} value={prevScore} onChange={(e) => setPrevScore(e.target.value)} onBlur={() => handleBlur('prevScore', prevScore, setPrevScore)} placeholder="1차" className={`w-12 px-1 py-1 text-center border rounded font-bold outline-none text-sm ${currentUserRole === 'student' ? 'bg-gray-100 text-gray-500 cursor-not-allowed' : 'bg-transparent text-gray-700'}`} />
                   ) : (
                     <div className="w-12 px-1 py-1 text-center font-bold text-gray-700 text-sm">{prevScore !== "" ? prevScore : "-"}</div>
                   )}
@@ -284,7 +282,7 @@
             {isSkipped ? <div className="text-center text-gray-400 text-xs">-</div> : (
               <div className="flex justify-center items-center">
                 {!isCapturing ? (
-                  <input type="number" min="0" max="100" value={target} onChange={(e) => setTarget(e.target.value)} onBlur={() => handleBlur('target', target, setTarget)} placeholder="목표" className="w-12 px-1 py-1 text-center border rounded bg-white font-bold text-emerald-700 outline-none text-sm shadow-sm" />
+                  <input type="number" step="any" value={target} onChange={(e) => setTarget(e.target.value)} onBlur={() => handleBlur('target', target, setTarget)} placeholder="목표" className="w-12 px-1 py-1 text-center border rounded bg-white font-bold text-emerald-700 outline-none text-sm shadow-sm" />
                 ) : (
                   <div className="w-12 px-1 py-1 text-center font-bold text-emerald-700 text-sm">{target !== "" ? target : "-"}</div>
                 )}
@@ -295,7 +293,7 @@
             {isSkipped ? <div className="text-center text-gray-400 text-xs font-bold">미실시</div> : (
               <div className="flex justify-center items-center">
                 {!isCapturing ? (
-                  <input type="number" min="0" max="100" value={score} onChange={(e) => setScore(e.target.value)} onBlur={() => handleBlur('score', score, setScore)} placeholder="획득" className="w-12 px-1 py-1 text-center border rounded bg-white font-bold outline-none text-sm shadow-sm" />
+                  <input type="number" step="any" disabled={currentUserRole === 'student'} value={score} onChange={(e) => setScore(e.target.value)} onBlur={() => handleBlur('score', score, setScore)} placeholder="획득" className={`w-12 px-1 py-1 text-center border rounded font-bold outline-none text-sm shadow-sm ${currentUserRole === 'student' ? 'bg-gray-100 text-gray-500 cursor-not-allowed' : 'bg-white'}`} />
                 ) : (
                   <div className="w-12 px-1 py-1 text-center font-bold text-sm">{score !== "" ? score : "-"}</div>
                 )}
@@ -315,7 +313,7 @@
       );
     };
 
-    const SemesterRow = ({ subject, onUpdate, isCapturing }) => {
+    const SemesterRow = ({ subject, onUpdate, isCapturing, currentUserRole }) => {
       const updateField = (field, val) => onUpdate(subject.name, field, val);
       const r1 = subject.ratio1, r2 = subject.ratio2, rp = subject.ratioPerf;
       
@@ -351,9 +349,9 @@
              <div className="flex justify-center gap-1">
               {!isCapturing ? (
                 <>
-                  <input type="number" disabled={r1 === 0} value={subject.score1||""} onChange={e=>updateField('score1', e.target.value)} onBlur={()=>handleBlur('score1', 100, subject.score1)} placeholder={r1 === 0 ? "-" : "1차"} className="w-10 px-0.5 py-1 text-center border rounded focus:border-purple-500 font-semibold outline-none disabled:bg-gray-100 text-xs"/>
-                  <input type="number" disabled={r2 === 0} value={subject.score2||""} onChange={e=>updateField('score2', e.target.value)} onBlur={()=>handleBlur('score2', 100, subject.score2)} placeholder={r2 === 0 ? "-" : "2차"} className="w-10 px-0.5 py-1 text-center border rounded focus:border-purple-500 font-semibold outline-none disabled:bg-gray-100 text-xs"/>
-                  <input type="number" disabled={rp === 0} value={subject.scorePerf||""} onChange={e=>updateField('scorePerf', e.target.value)} onBlur={()=>handleBlur('scorePerf', rp, subject.scorePerf)} placeholder={rp === 0 ? "-" : "수행"} className="w-10 px-0.5 py-1 text-center border rounded focus:border-purple-500 font-semibold outline-none disabled:bg-gray-100 text-xs"/>
+                  <input type="number" step="any" disabled={r1 === 0 || currentUserRole === 'student'} value={subject.score1||""} onChange={e=>updateField('score1', e.target.value)} onBlur={()=>handleBlur('score1', 100, subject.score1)} placeholder={r1 === 0 ? "-" : "1차"} className={`w-10 px-0.5 py-1 text-center border rounded focus:border-purple-500 font-semibold outline-none text-xs ${r1 === 0 || currentUserRole === 'student' ? 'bg-gray-100 cursor-not-allowed' : ''}`}/>
+                  <input type="number" step="any" disabled={r2 === 0 || currentUserRole === 'student'} value={subject.score2||""} onChange={e=>updateField('score2', e.target.value)} onBlur={()=>handleBlur('score2', 100, subject.score2)} placeholder={r2 === 0 ? "-" : "2차"} className={`w-10 px-0.5 py-1 text-center border rounded focus:border-purple-500 font-semibold outline-none text-xs ${r2 === 0 || currentUserRole === 'student' ? 'bg-gray-100 cursor-not-allowed' : ''}`}/>
+                  <input type="number" step="any" disabled={rp === 0 || currentUserRole === 'student'} value={subject.scorePerf||""} onChange={e=>updateField('scorePerf', e.target.value)} onBlur={()=>handleBlur('scorePerf', rp, subject.scorePerf)} placeholder={rp === 0 ? "-" : "수행"} className={`w-10 px-0.5 py-1 text-center border rounded focus:border-purple-500 font-semibold outline-none text-xs ${rp === 0 || currentUserRole === 'student' ? 'bg-gray-100 cursor-not-allowed' : ''}`}/>
                 </>
               ) : (
                 <>
@@ -376,8 +374,26 @@
 
     const ResolutionArea = ({ resolution, onUpdate, isCapturing }) => {
       const [text, setText] = useState(resolution);
-      useEffect(() => setText(resolution), [resolution]);
+      const debounceTimer = useRef(null);
+
+      useEffect(() => {
+        setText(resolution);
+      }, [resolution]);
       
+      const handleChange = (e) => {
+        const val = e.target.value;
+        setText(val);
+        if (debounceTimer.current) clearTimeout(debounceTimer.current);
+        debounceTimer.current = setTimeout(() => {
+          onUpdate(val);
+        }, 500);
+      };
+
+      const handleBlur = () => {
+        if (debounceTimer.current) clearTimeout(debounceTimer.current);
+        onUpdate(text);
+      };
+
       if (isCapturing) {
         return (
           <div className="w-full min-h-[6rem] p-3 rounded-lg border border-gray-300 bg-gray-50 leading-relaxed whitespace-pre-wrap text-gray-800 overflow-hidden text-sm">
@@ -388,10 +404,11 @@
 
       return (
         <textarea
+          maxLength={1500}
           value={text}
-          onChange={(e) => setText(e.target.value)}
-          onBlur={() => onUpdate(text)}
-          placeholder="이번 시험에서 목표를 달성하기 위해 어떤 노력을 할 것인지, 스스로에게 응원의 한마디를 적어보세요!"
+          onChange={handleChange}
+          onBlur={handleBlur}
+          placeholder="이번 시험에서 목표를 달성하기 위해 어떤 노력을 할 것인지, 스스로에게 응원의 한마디를 적어보세요! (최대 1500자)"
           className="w-full h-24 p-3 rounded-lg border border-gray-300 focus:ring-2 focus:ring-emerald-500 outline-none resize-none bg-gray-50 hover:bg-white transition leading-relaxed text-sm"
         ></textarea>
       );
@@ -519,7 +536,10 @@
         
         try {
           if (!studentData.pwd) {
-            if (!/^\d{4}$/.test(newPasswordInput)) return setLoginError("비밀번호는 반드시 숫자 4자리로만 입력해주세요.");
+            if (!/^\d{4}$/.test(newPasswordInput)) {
+              showErrorModal("초기 비밀번호는 반드시 숫자 4자리로만 설정해야 합니다.");
+              return;
+            }
             setIsLoggingIn(true);
             const docRef = doc(db, 'artifacts', appId, 'public', 'data', 'class_data', DOC_ID);
             await withTimeout(setDoc(docRef, { students: { [currentUserName]: { pwd: newPasswordInput } } }, { merge: true }), 15000, "서버 연결 지연");
@@ -627,7 +647,7 @@
                     )}
                     {currentUserName && (docData && docData.students && docData.students[currentUserName] && docData.students[currentUserName].pwd) && (
                       <>
-                        <input type="password" value={passwordInput} onChange={handlePasswordChange} onKeyDown={(e) => { if(e.key === 'Enter') { e.preventDefault(); handleStudentLogin(); } }} placeholder="비밀번호 입력" className="w-full p-3 border rounded-lg outline-none text-center tracking-widest text-lg focus:ring-2 focus:ring-emerald-500" />
+                        <input type="password" maxLength="4" value={passwordInput} onChange={handlePasswordChange} onKeyDown={(e) => { if(e.key === 'Enter') { e.preventDefault(); handleStudentLogin(); } }} placeholder="비밀번호 입력" className="w-full p-3 border rounded-lg outline-none text-center tracking-widest text-lg focus:ring-2 focus:ring-emerald-500" />
                         {loginError && <p className="text-red-500 font-bold text-xs mb-2 text-center animate-pulse">{loginError}</p>}
                         <button type="button" onClick={handleStudentLogin} className="w-full py-3 text-white rounded-lg font-bold transition bg-emerald-600 hover:bg-emerald-700 text-sm shadow-md">로그인</button>
                       </>
@@ -983,8 +1003,8 @@
                       </thead>
                       <tbody>
                         {mergedSubjects.map((subject) => isSemesterFinal ? 
-                          <SemesterRow key={subject.id} subject={subject} onUpdate={handleSubjectChange} isCapturing={isCapturing} /> : 
-                          <StandardRow key={subject.id} subject={subject} isFirstExam={isFirstExam} isSecondExam={isSecondExam} isSem1Exam1={isSem1Exam1} onUpdate={handleSubjectChange} isCapturing={isCapturing} />
+                          <SemesterRow key={subject.id} subject={subject} onUpdate={handleSubjectChange} isCapturing={isCapturing} currentUserRole={currentUserRole} /> : 
+                          <StandardRow key={subject.id} subject={subject} isFirstExam={isFirstExam} isSecondExam={isSecondExam} isSem1Exam1={isSem1Exam1} onUpdate={handleSubjectChange} isCapturing={isCapturing} currentUserRole={currentUserRole} />
                         )}
                       </tbody>
                     </table>
