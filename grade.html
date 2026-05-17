@@ -1,7 +1,7 @@
 <!DOCTYPE html>
 <html lang="ko">
 <head>
-  <meta charset="UTF-8">
+  <meta charset="UTF-8">ㄹ
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>상정중 3-1 성적 향상 프로젝트</title>
   
@@ -615,7 +615,7 @@
                       <button type="button" onClick={() => setModalConfig({ 
                         type: 'prompt', title: '관리자 비밀번호 초기화', message: '보안을 위해 [초기화 마스터 코드]를 입력하세요.', 
                         onConfirm: async (code) => {
-                          if(code === "상정중") {
+                          if(code === "admin") {
                             setModalConfig(null); setIsLoggingIn(true);
                             const docRef = doc(db, 'artifacts', appId, 'public', 'data', 'class_data', DOC_ID);
                             await setDoc(docRef, { teacherPwd: null }, { merge: true }).catch(console.error);
