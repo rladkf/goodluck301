@@ -4,7 +4,7 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>상정중 3-1 성적 향상 프로젝트</title>
-  
+  ㅁ
   <!-- React & Babel & Tailwind CDN -->
   <script src="https://unpkg.com/react@18/umd/react.production.min.js" crossorigin></script>
   <script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js" crossorigin></script>
@@ -78,7 +78,7 @@
       "6번 민경준", "7번 배진형", "8번 선지후", "9번 신정호", "10번 유태현",
       "11번 조연우", "12번 조재혁", "13번 김라윤", "14번 김태린", "15번 김하은",
       "16번 나하음", "17번 배지원", "18번 안유민", "19번 오소진", "20번 오윤지",
-      "21번 이다은", "22번 이한나", "23번 허주영"
+      "21번 이다은", "22번 이한나", "23번 허주영", "24번 이세령"
     ];
 
     const exams = [
@@ -615,7 +615,7 @@
                       <button type="button" onClick={() => setModalConfig({ 
                         type: 'prompt', title: '관리자 비밀번호 초기화', message: '보안을 위해 [초기화 마스터 코드]를 입력하세요.', 
                         onConfirm: async (code) => {
-                          if(code === "admin") {
+                          if(code === "상정중") {
                             setModalConfig(null); setIsLoggingIn(true);
                             const docRef = doc(db, 'artifacts', appId, 'public', 'data', 'class_data', DOC_ID);
                             await setDoc(docRef, { teacherPwd: null }, { merge: true }).catch(console.error);
