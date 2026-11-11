@@ -36,11 +36,11 @@
 import { initializeApp } from "https://www.gstatic.com/firebasejs/10.8.1/firebase-app.js";
 import { initializeAppCheck, ReCaptchaV3Provider } from "https://www.gstatic.com/firebasejs/10.8.1/firebase-app-check.js";
 import {
-  getAuth, setPersistence, browserSessionPersistence,
-  signInWithEmailAndPassword, signOut, onAuthStateChanged, updatePassword
+  getAuth, setPersistence, browserSessionPersistence, GoogleAuthProvider, signInWithPopup,
+  signInWithEmailAndPassword, createUserWithEmailAndPassword, deleteUser, signOut, onAuthStateChanged, updatePassword
 } from "https://www.gstatic.com/firebasejs/10.8.1/firebase-auth.js";
 import {
-  initializeFirestore, memoryLocalCache, doc, collection, collectionGroup, setDoc,
+  initializeFirestore, memoryLocalCache, doc, collection, collectionGroup, setDoc, getDoc, getDocs, query, limit,
   onSnapshot, writeBatch, deleteField, waitForPendingWrites
 } from "https://www.gstatic.com/firebasejs/10.8.1/firebase-firestore.js";
 
@@ -48,7 +48,8 @@ const { useState, useEffect, useRef } = React;
 
 /* ═════════════════════════ 1. 설정 ═════════════════════════
    ※ 아래 값은 Firebase 프로젝트의 '공개 식별자'입니다. 비밀번호가 아니며,
-     데이터 보호는 Firestore 보안 규칙이 담당합니다.                       */
+     데이터 보호는 Firestore 보안 규칙이 담당합니다.
+   ※ 관리자 구글 계정 주소는 코드에 없고, 보안 규칙에만 들어 있습니다.        */
 const firebaseConfig = {
   apiKey: "AIzaSyAjyIYjoY7LrzIWPpyPO8GRsvVo-598glk",
   authDomain: "taerin-rolling-paper.firebaseapp.com",
@@ -68,19 +69,27 @@ setPersistence(auth, browserSessionPersistence).catch(console.error);   // 탭�
 // 메모리 캐시: 공용 PC에 성적이 남지 않음 / 롱폴링 자동 감지: 학교망 대응
 const db = initializeFirestore(app, { localCache: memoryLocalCache(), experimentalAutoDetectLongPolling: true });
 
-const EMAIL_DOMAIN = "taerin-rolling-paper.firebaseapp.com";   // 보안 규칙과 같아야 함
-const TEACHER_EMAIL = `teacher@${EMAIL_DOMAIN}`;
+const EMAIL_DOMAIN = "taerin-rolling-paper.firebaseapp.com";   // 학생 계정용, 보안 규칙과 같아야 함
 const STUDENT_COUNT = 24;
-const STUDENT_MIN_PWD = 6;
-const TEACHER_MIN_PWD = 8;
+const PIN_LEN = 4;
+const PIN_SUFFIX = "#sj301pin";   // Firebase 최소 길이(6자)를 맞추기 위한 고정 문자. 보안을 높여 주지는 않음
 const IDLE_MINUTES = 30;
 const ROOT = "grade_students";
-const VERSION = "v19.1";
+const VERSION = "v19.3";
 
 const ALL_NOS = Array.from({ length: STUDENT_COUNT }, (_, i) => i + 1);
 const sidOf = (no) => `s${String(no).padStart(2, "0")}`;
-const emailOf = (no) => `${sidOf(no)}@${EMAIL_DOMAIN}`;
+const pinPwd = (pin) => `${pin}${PIN_SUFFIX}`;
+const emailOf = (no, ver) => `${sidOf(no)}v${ver}@${EMAIL_DOMAIN}`;
 const examRef = (no, examId) => doc(db, ROOT, sidOf(no), "exams", examId);
+const slotRef = (no) => doc(db, "slots", sidOf(no));
+const settingsRef = doc(db, "meta", "settings");
+const readSlot = async (no) => {
+  const d = await getDoc(slotRef(no));
+  const v = d.exists() ? d.data() : {};
+  return { exists: d.exists(), ver: Number.isInteger(v.ver) ? v.ver : 0, uid: v.uid || null };
+};
+const authHooks = { settingUp: false, recheck: null };   // 최초 설정 중 로그인 판정을 잠시 미루기 위함
 
 const EXAMS = [
   { id: "s1e1", label: "3학년 1학기 1차시험", short: "1학기 1차", sem: 1, kind: "e1" },
@@ -349,20 +358,25 @@ const withTimeout = (promise, ms) => {
   const timeout = new Promise((_, rej) => { t = setTimeout(() => { const e = new Error("timeout"); e.code = "timeout"; rej(e); }, ms); });
   return Promise.race([promise, timeout]).finally(() => clearTimeout(t));
 };
-const BAD_LOGIN = "번호(아이디) 또는 비밀번호가 올바르지 않습니다.";
+const BAD_LOGIN = "비밀번호가 올바르지 않습니다.";
 const NETWORK = "서버에 연결할 수 없습니다. 인터넷 연결을 확인해 주세요.\n학교 와이파이에서만 안 된다면 휴대폰 데이터로 바꿔 새로고침해 보세요.";
 const ERR = {
-  "permission-denied": "권한이 없습니다.\n(선생님: 보안 규칙 게시 여부와 계정 이메일을 확인해 주세요.)",
+  "permission-denied": "권한이 없습니다.\n(선생님: 보안 규칙이 게시되었는지 확인해 주세요.)",
   "unavailable": NETWORK,
   "timeout": "서버 응답이 늦습니다. 잠시 후 다시 확인해 주세요.",
   "auth/invalid-credential": BAD_LOGIN, "auth/invalid-login-credentials": BAD_LOGIN,
   "auth/wrong-password": BAD_LOGIN, "auth/user-not-found": BAD_LOGIN, "auth/invalid-email": BAD_LOGIN,
-  "auth/too-many-requests": "로그인 시도가 너무 많아 잠시 잠겼습니다. 몇 분 뒤 다시 시도해 주세요.",
+  "auth/too-many-requests": "시도가 너무 많아 잠시 잠겼습니다. 몇 분 뒤 다시 시도해 주세요.",
   "auth/network-request-failed": NETWORK,
   "auth/requires-recent-login": "보안을 위해 로그아웃 후 다시 로그인한 다음 변경해 주세요.",
   "auth/weak-password": "비밀번호가 너무 짧습니다.",
-  "auth/password-does-not-meet-requirements": "비밀번호 정책에 맞지 않습니다. 더 길게 정해 주세요.",
+  "auth/password-does-not-meet-requirements": "Firebase 비밀번호 정책에 맞지 않습니다.\n(선생님: Authentication → 설정 → 비밀번호 정책을 꺼 주세요.)",
   "auth/user-disabled": "사용이 중지된 계정입니다. 선생님께 문의하세요.",
+  "auth/email-already-in-use": "이미 비밀번호가 설정된 번호입니다.\n본인이 설정한 게 아니라면 선생님께 말씀하세요.",
+  "auth/admin-restricted-operation": "새 계정 만들기가 꺼져 있습니다.\n(선생님: Authentication → 설정 → 사용자 작업에서 '생성(가입) 허용'을 켜 주세요.)",
+  "auth/popup-blocked": "로그인 창(팝업)이 차단되었습니다.\n주소창 오른쪽의 팝업 차단 아이콘을 눌러 '허용'한 뒤 다시 눌러 주세요.",
+  "auth/unauthorized-domain": "이 사이트 주소가 Firebase에 등록되지 않았습니다.\n(Authentication → 설정 → 승인된 도메인에 rladkf.github.io 추가)",
+  "auth/operation-not-allowed": "Firebase에서 이 로그인 방식이 꺼져 있습니다.\n(Authentication → 로그인 방법에서 Google / 이메일·비밀번호 사용 설정)",
 };
 const errorMessage = (e) => (e && ERR[e.code]) || `오류가 발생했습니다.\n(${(e && (e.code || e.message)) || "알 수 없음"})`;
 
@@ -547,8 +561,8 @@ const Modal = ({ cfg, onClose }) => {
             <span className="block text-xs font-bold text-gray-600 mb-1">{f.label}</span>
             {f.type === "textarea"
               ? <textarea rows={10} value={vals[f.key]} onChange={(e) => setVals((v) => ({ ...v, [f.key]: e.target.value }))} className={inputCls} />
-              : <input type={f.type || "text"} inputMode={f.inputMode} autoFocus={i === 0} value={vals[f.key]}
-                  onChange={(e) => setVals((v) => ({ ...v, [f.key]: e.target.value }))}
+              : <input type={f.type || "text"} inputMode={f.inputMode} maxLength={f.maxLength} autoFocus={i === 0} value={vals[f.key]}
+                  onChange={(e) => setVals((v) => ({ ...v, [f.key]: f.digits ? e.target.value.replace(/\D/g, "") : e.target.value }))}
                   onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); confirm(); } }} className={inputCls} />}
           </label>
         ))}
@@ -881,29 +895,90 @@ const StatsView = ({ dataByNo, roster, capture, onPickStudent, onCapture, notify
 const LoginScreen = () => {
   const [mode, setMode] = useState(null);
   const [no, setNo] = useState(null);
-  const [pwd, setPwd] = useState("");
+  const [step, setStep] = useState("pick");      // pick | loading | login | setup | closed
+  const [slotInfo, setSlotInfo] = useState(null);
+  const [pin, setPin] = useState("");
+  const [pin2, setPin2] = useState("");
   const [err, setErr] = useState("");
   const [loading, setLoading] = useState(false);
-  const back = () => { setMode(null); setNo(null); setPwd(""); setErr(""); };
-  const submit = async () => {
-    if (loading) return;
-    setErr("");
-    if (mode === "student" && !no) return setErr("본인 번호를 먼저 선택하세요.");
-    if (!pwd) return setErr("비밀번호를 입력하세요.");
-    setLoading(true);
-    try { await signInWithEmailAndPassword(auth, mode === "teacher" ? TEACHER_EMAIL : emailOf(no), pwd); }
-    catch (e) { setErr(errorMessage(e)); setPwd(""); setLoading(false); }
+  const pickSeq = useRef(0);
+  const back = () => { setMode(null); setNo(null); setStep("pick"); setPin(""); setPin2(""); setErr(""); };
+
+  const pickNo = async (n) => {
+    const my = ++pickSeq.current;
+    setNo(n); setPin(""); setPin2(""); setErr(""); setStep("loading");
+    try {
+      const [slot, st] = await Promise.all([withTimeout(readSlot(n), 15000), withTimeout(getDoc(settingsRef), 15000)]);
+      if (my !== pickSeq.current) return;
+      const open = st.exists() && st.data().signupOpen === true;
+      setSlotInfo(slot);
+      setStep(slot.uid ? "login" : open ? "setup" : "closed");
+    } catch (e) { if (my === pickSeq.current) { setErr(errorMessage(e)); setStep("pick"); } }
   };
-  const pwdInput = (
-    <input type="password" value={pwd} autoFocus autoComplete="current-password" inputMode={mode === "student" ? "numeric" : undefined}
-      onChange={(e) => { setPwd(e.target.value); if (err) setErr(""); }}
-      onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); submit(); } }}
-      placeholder="비밀번호 입력" className="w-full p-3 border rounded-lg outline-none text-center tracking-widest text-lg focus:ring-2 focus:ring-emerald-500" />
+
+  const login = async () => {
+    if (loading) return;
+    if (!new RegExp(`^\\d{${PIN_LEN}}$`).test(pin)) return setErr(`숫자 ${PIN_LEN}자리를 입력하세요.`);
+    setLoading(true); setErr("");
+    try { await signInWithEmailAndPassword(auth, emailOf(no, slotInfo.ver), pinPwd(pin)); }
+    catch (e) { setErr(errorMessage(e)); setPin(""); setLoading(false); }
+  };
+
+  const setup = async () => {
+    if (loading) return;
+    if (!new RegExp(`^\\d{${PIN_LEN}}$`).test(pin)) return setErr(`숫자 ${PIN_LEN}자리로 정해 주세요.`);
+    if (pin !== pin2) return setErr("두 번 입력한 비밀번호가 다릅니다.");
+    setLoading(true); setErr("");
+    authHooks.settingUp = true;
+    const email = emailOf(no, slotInfo.ver);
+    let created = false;
+    try {
+      try { await createUserWithEmailAndPassword(auth, email, pinPwd(pin)); created = true; }
+      catch (e) {
+        if (e.code !== "auth/email-already-in-use") throw e;
+        await signInWithEmailAndPassword(auth, email, pinPwd(pin));   // 이전 시도에서 계정만 만들어진 경우
+      }
+      await withTimeout(setDoc(slotRef(no), { ver: slotInfo.ver, uid: auth.currentUser.uid }), 15000);
+      authHooks.settingUp = false;
+      if (authHooks.recheck) authHooks.recheck();
+    } catch (e) {
+      authHooks.settingUp = false;
+      const u = auth.currentUser;
+      if (u) { if (created) await deleteUser(u).catch(() => signOut(auth)); else await signOut(auth).catch(() => {}); }
+      setLoading(false); setPin(""); setPin2("");
+      setErr(e.code === "permission-denied"
+        ? "지금은 비밀번호를 새로 만들 수 없습니다.\n선생님이 '최초 비밀번호 설정'을 열어 두셨는지, 이미 누가 설정했는지 확인해 주세요."
+        : (e.code === "auth/invalid-credential" || e.code === "auth/wrong-password" || e.code === "auth/invalid-login-credentials")
+          ? "이 번호는 이미 다른 비밀번호로 설정되어 있습니다. 선생님께 말씀하세요."
+          : errorMessage(e));
+    }
+  };
+
+  const googleLogin = async () => {
+    if (loading) return;
+    setErr(""); setLoading(true);
+    try {
+      const provider = new GoogleAuthProvider();
+      provider.setCustomParameters({ prompt: "select_account" });
+      await signInWithPopup(auth, provider);
+    } catch (e) {
+      setLoading(false);
+      if (e.code === "auth/popup-closed-by-user" || e.code === "auth/cancelled-popup-request") return;
+      setErr(errorMessage(e));
+    }
+  };
+
+  const pinInput = (value, set, ph, onEnter, auto) => (
+    <input type="password" value={value} autoFocus={auto} inputMode="numeric" maxLength={PIN_LEN} autoComplete="off"
+      onChange={(e) => { set(e.target.value.replace(/\D/g, "").slice(0, PIN_LEN)); if (err) setErr(""); }}
+      onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); onEnter(); } }}
+      placeholder={ph} className="w-full p-3 border rounded-lg outline-none text-center tracking-[0.4em] text-xl font-bold focus:ring-2 focus:ring-emerald-500" />
   );
+
   return (
     <div className="min-h-screen bg-emerald-50 flex flex-col items-center justify-center p-4">
       <div className="bg-white rounded-3xl shadow-xl overflow-hidden w-full max-w-sm relative">
-        {loading && <div className="absolute inset-0 bg-white/80 flex flex-col items-center justify-center z-50 text-emerald-600"><Spinner className="w-8 h-8 mb-3" /><span className="text-lg font-bold text-emerald-800">로그인 중...</span></div>}
+        {loading && <div className="absolute inset-0 bg-white/80 flex flex-col items-center justify-center z-50 text-emerald-600"><Spinner className="w-8 h-8 mb-3" /><span className="text-lg font-bold text-emerald-800">처리 중...</span></div>}
         <div className="bg-emerald-600 p-6 text-center text-white">
           <Award className="w-10 h-10 mx-auto mb-3" />
           <h1 className="text-xl font-bold mb-1">상정중 3-1 성적 향상 프로젝트 <span className="text-xs text-yellow-300 ml-1 font-black">{VERSION}</span></h1>
@@ -921,23 +996,44 @@ const LoginScreen = () => {
               <h2 className="text-lg font-bold text-center text-gray-800 flex items-center justify-center gap-2"><User className="w-4 h-4" /> 내 번호 선택</h2>
               <div className="grid grid-cols-6 gap-1.5">
                 {ALL_NOS.map((n) => (
-                  <button key={n} type="button" onClick={() => { setNo(n); setPwd(""); setErr(""); }}
+                  <button key={n} type="button" onClick={() => pickNo(n)}
                     className={`py-2 rounded-lg font-bold text-sm border ${no === n ? "bg-emerald-600 text-white border-emerald-600" : "bg-white text-gray-700 border-gray-200 hover:bg-emerald-50"}`}>{n}</button>
                 ))}
               </div>
-              {no && <><p className="text-center text-sm font-bold text-emerald-700">{no}번으로 로그인</p>{pwdInput}</>}
+              {step === "loading" && <p className="text-center text-sm text-gray-500 font-bold">확인 중...</p>}
+              {step === "login" && (
+                <>
+                  <p className="text-center text-sm font-bold text-emerald-700">{no}번 · 비밀번호 {PIN_LEN}자리를 입력하세요</p>
+                  {pinInput(pin, setPin, "● ● ● ●", login, true)}
+                  <button type="button" onClick={login} className="w-full py-3 text-white rounded-lg font-bold bg-emerald-600 hover:bg-emerald-700 text-sm shadow-md">로그인</button>
+                </>
+              )}
+              {step === "setup" && (
+                <>
+                  <div className="p-3 bg-yellow-50 border border-yellow-200 rounded-lg text-xs text-yellow-800 font-semibold leading-relaxed">
+                    {no}번은 처음 접속이에요. 나만 아는 <span className="text-red-500">숫자 {PIN_LEN}자리</span> 비밀번호를 만들어 주세요.<br/>생일·1234·0000처럼 쉬운 번호는 피하세요.
+                  </div>
+                  {pinInput(pin, setPin, "새 비밀번호", () => {}, true)}
+                  {pinInput(pin2, setPin2, "한 번 더 입력", setup, false)}
+                  <button type="button" onClick={setup} className="w-full py-3 text-white rounded-lg font-bold bg-yellow-500 hover:bg-yellow-600 text-sm shadow-md">비밀번호 만들고 시작하기</button>
+                </>
+              )}
+              {step === "closed" && (
+                <div className="p-3 bg-gray-50 border border-gray-200 rounded-lg text-sm text-gray-600 text-center leading-relaxed">
+                  {no}번은 아직 비밀번호가 없어요.<br/>선생님이 '최초 비밀번호 설정'을 열어 주시면 만들 수 있어요.
+                </div>
+              )}
               {err && <p className="text-red-500 font-bold text-xs text-center whitespace-pre-wrap">{err}</p>}
-              <button type="button" onClick={submit} className="w-full py-3 text-white rounded-lg font-bold bg-emerald-600 hover:bg-emerald-700 text-sm shadow-md">로그인</button>
-              <p className="text-[11px] text-gray-500 text-center leading-relaxed">처음에는 선생님께 받은 비밀번호로 로그인한 뒤<br/>오른쪽 위 '비밀번호 변경'에서 바꿔 주세요.</p>
+              <p className="text-[11px] text-gray-500 text-center">비밀번호를 잊었으면 선생님께 초기화를 요청하세요.</p>
               <button type="button" onClick={back} className="w-full py-2 text-gray-500 font-semibold text-xs">돌아가기</button>
             </div>
           )}
           {mode === "teacher" && (
             <div className="space-y-4">
               <h2 className="text-lg font-bold text-center text-gray-800 flex items-center justify-center gap-2"><Lock className="w-4 h-4" /> 관리자 로그인</h2>
-              {pwdInput}
+              <button type="button" onClick={googleLogin} className="w-full py-3.5 rounded-lg font-bold border-2 border-gray-300 bg-white hover:bg-gray-50 text-gray-800 text-sm shadow-sm">Google 계정으로 로그인</button>
+              <p className="text-[11px] text-gray-500 text-center leading-relaxed">관리자로 등록된 구글 계정만 들어갈 수 있습니다.<br/>로그인 창이 안 뜨면 팝업 차단을 해제해 주세요.</p>
               {err && <p className="text-red-500 font-bold text-xs text-center whitespace-pre-wrap">{err}</p>}
-              <button type="button" onClick={submit} className="w-full py-3 text-white rounded-lg font-bold bg-emerald-600 hover:bg-emerald-700 text-sm">로그인</button>
               <button type="button" onClick={back} className="w-full py-2 text-gray-500 font-semibold text-xs">돌아가기</button>
             </div>
           )}
@@ -957,9 +1053,12 @@ const SAVE_CHIP = {
 
 const App = () => {
   const [authReady, setAuthReady] = useState(false);
+  const [checking, setChecking] = useState(false);
   const [role, setRole] = useState(null);
   const [myNo, setMyNo] = useState(null);
   const [roster, setRoster] = useState({});
+  const [slots, setSlots] = useState({});
+  const [signupOpen, setSignupOpen] = useState(false);
   const [selectedNo, setSelectedNo] = useState(1);
   const [examId, setExamId] = useState(EXAMS[0].id);
   const [tab, setTab] = useState("student");
@@ -984,18 +1083,60 @@ const App = () => {
 
   useEffect(() => { window.__APP_STARTED = true; }, []);
 
-  // 로그인 상태 → 역할 (이메일로만 판단, 서버 규칙과 동일)
-  useEffect(() => onAuthStateChanged(auth, (u) => {
-    autoPicked.current = false;
-    setListenError(null); setRoster({}); setDataByNo({}); setLoaded(false); setSaveStatus("idle"); setTab("student");
-    const email = ((u && u.email) || "").toLowerCase();
-    const m = email.match(/^s(\d{2})@(.+)$/);
-    if (!u) { setRole(null); setMyNo(null); }
-    else if (email === TEACHER_EMAIL) { setRole("teacher"); setMyNo(null); }
-    else if (m && m[2] === EMAIL_DOMAIN && Number(m[1]) >= 1 && Number(m[1]) <= STUDENT_COUNT) { setRole("student"); setMyNo(Number(m[1])); }
-    else { setRole(null); setMyNo(null); signOut(auth).catch(() => {}); }
-    setAuthReady(true);
-  }), []);
+  // 로그인 상태 → 역할 판단 (코드가 아니라 서버 데이터로 확인)
+  //  · 구글 로그인: 관리자 전용 데이터를 읽어 보고, 보안 규칙이 허락하면 관리자
+  //  · 학생 로그인: 그 번호의 자리(slot)를 이 계정이 차지하고 있는지 확인
+  useEffect(() => {
+    let seq = 0;
+    const resolve = async (u) => {
+      const my = ++seq;
+      autoPicked.current = false;
+      setListenError(null); setRoster({}); setDataByNo({}); setLoaded(false); setSaveStatus("idle"); setTab("student");
+      setRole(null); setMyNo(null); setChecking(false);
+      if (!u) { setAuthReady(true); return; }
+      const isGoogle = (u.providerData || []).some((p) => p.providerId === "google.com");
+      if (isGoogle) {
+        setChecking(true); setAuthReady(true);
+        try {
+          await getDocs(query(collection(db, ROOT), limit(1)));
+          if (my !== seq) return;
+          setRole("teacher");
+        } catch (e) {
+          if (my !== seq) return;
+          if (e.code === "permission-denied") {
+            await signOut(auth).catch(() => {});
+            notify("관리자 계정이 아닙니다", "이 구글 계정은 관리자로 등록되어 있지 않습니다.\n등록된 구글 계정으로 다시 로그인해 주세요.", "error");
+          } else {
+            setRole("teacher");   // 네트워크 문제 등은 이후 화면에서 안내
+          }
+        } finally {
+          if (my === seq) setChecking(false);
+        }
+        return;
+      }
+      if (authHooks.settingUp) { setAuthReady(true); return; }   // 최초 설정 진행 중 → 끝나면 다시 확인
+      const m = (u.email || "").toLowerCase().match(/^s(\d{2})v(\d+)@(.+)$/);
+      const no = m && m[3] === EMAIL_DOMAIN ? Number(m[1]) : 0;
+      if (!(no >= 1 && no <= STUDENT_COUNT)) { await signOut(auth).catch(() => {}); setAuthReady(true); return; }
+      setChecking(true); setAuthReady(true);
+      try {
+        const slot = await withTimeout(readSlot(no), 15000);
+        if (my !== seq) return;
+        if (slot.uid === u.uid && slot.ver === Number(m[2])) { setRole("student"); setMyNo(no); }
+        else {
+          await signOut(auth).catch(() => {});
+          notify("비밀번호를 다시 만들어 주세요", "선생님이 비밀번호를 초기화했습니다.\n번호를 누르고 새 비밀번호를 만들어 주세요.", "error");
+        }
+      } catch (e) {
+        if (my !== seq) return;
+        setRole("student"); setMyNo(no);   // 네트워크 문제는 이후 화면에서 안내
+      } finally {
+        if (my === seq) setChecking(false);
+      }
+    };
+    authHooks.recheck = () => resolve(auth.currentUser);
+    return onAuthStateChanged(auth, resolve);
+  }, []);
 
   // 명단
   useEffect(() => {
@@ -1010,6 +1151,18 @@ const App = () => {
     }
     return onSnapshot(doc(db, ROOT, sidOf(myNo)), (d) => setRoster(d.exists() ? { [myNo]: String(d.data().name || "").trim() } : {}), onErr);
   }, [role, myNo]);
+
+  // 선생님: 학생 비밀번호 설정 현황 · 최초 설정 스위치
+  useEffect(() => {
+    if (role !== "teacher") return;
+    const u1 = onSnapshot(collection(db, "slots"), (snap) => {
+      const r = {};
+      snap.forEach((d) => { const n = Number(d.id.replace(/\D/g, "")); if (n) r[n] = { ver: Number.isInteger(d.data().ver) ? d.data().ver : 0, uid: d.data().uid || null }; });
+      setSlots(r);
+    }, console.error);
+    const u2 = onSnapshot(settingsRef, (d) => setSignupOpen(d.exists() && d.data().signupOpen === true), console.error);
+    return () => { u1(); u2(); };
+  }, [role]);
 
   // 성적 데이터 실시간 구독 (선생님: 반 전체 / 학생: 본인만)
   useEffect(() => {
@@ -1097,25 +1250,42 @@ const App = () => {
   };
   logoutRef.current = logout;
 
-  const changePassword = () => {
-    const min = isTeacher ? TEACHER_MIN_PWD : STUDENT_MIN_PWD;
+  // 학생 전용 (선생님은 구글 계정이라 비밀번호를 구글에서 관리)
+  const changePassword = () => openModal({
+    title: "비밀번호 변경", cancel: true, confirmText: "변경",
+    message: `새 비밀번호를 숫자 ${PIN_LEN}자리로 정해 주세요. 생일·1234처럼 쉬운 번호는 피하세요.`,
+    fields: [
+      { key: "p1", label: "새 비밀번호", type: "password", inputMode: "numeric", maxLength: PIN_LEN, digits: true },
+      { key: "p2", label: "새 비밀번호 확인", type: "password", inputMode: "numeric", maxLength: PIN_LEN, digits: true },
+    ],
+    onConfirm: async ({ p1, p2 }) => {
+      if (!new RegExp(`^\\d{${PIN_LEN}}$`).test(p1 || "")) return `숫자 ${PIN_LEN}자리로 정해 주세요.`;
+      if (p1 !== p2) return "두 비밀번호가 같지 않습니다.";
+      await updatePassword(auth.currentUser, pinPwd(p1));
+      notify("완료", "비밀번호가 변경되었습니다.", "success");
+    },
+  });
+
+  // 선생님: 최초 설정 스위치 · 학생 비밀번호 초기화
+  const toggleSignup = () => {
+    const next = !signupOpen;
     openModal({
-      title: "비밀번호 변경", cancel: true, confirmText: "변경",
-      message: isTeacher ? `${min}자 이상, 다른 곳에서 쓰지 않는 비밀번호로 정해 주세요.` : `숫자 ${min}자리 이상으로 정해 주세요. 생일·전화번호는 피하세요.`,
-      fields: [
-        { key: "p1", label: "새 비밀번호", type: "password", inputMode: isTeacher ? undefined : "numeric" },
-        { key: "p2", label: "새 비밀번호 확인", type: "password", inputMode: isTeacher ? undefined : "numeric" },
-      ],
-      onConfirm: async ({ p1, p2 }) => {
-        if (!p1 || p1 !== p2) return "두 비밀번호가 같지 않습니다.";
-        if (p1.length < min) return `${min}자 이상으로 정해 주세요.`;
-        if (!isTeacher && !/^\d+$/.test(p1)) return "숫자로만 정해 주세요.";
-        if (/^(\d)\1+$/.test(p1) || "0123456789012".includes(p1) || "9876543210987".includes(p1)) return "같은 숫자 반복이나 연속 숫자는 쓸 수 없습니다.";
-        await updatePassword(auth.currentUser, p1);
-        notify("완료", "비밀번호가 변경되었습니다.", "success");
-      },
+      title: next ? "최초 비밀번호 설정 열기" : "최초 비밀번호 설정 닫기", cancel: true, confirmText: next ? "열기" : "닫기",
+      message: next
+        ? "열려 있는 동안에는 아직 비밀번호가 없는 번호를 누구나 먼저 설정할 수 있습니다.\n학생들이 설정하는 시간에만 열고, 끝나면 꼭 닫아 주세요."
+        : "닫으면 새로 비밀번호를 만들 수 없습니다. 이미 만든 학생은 계속 로그인할 수 있습니다.",
+      onConfirm: async () => { await withTimeout(setDoc(settingsRef, { signupOpen: next }, { merge: true }), 15000); },
     });
   };
+  const resetStudentPin = (no) => openModal({
+    title: "비밀번호 초기화", tone: "danger", cancel: true, confirmText: "초기화",
+    message: `${studentLabel(no)} 학생의 비밀번호를 초기화합니다.\n성적은 그대로 남고, 학생은 '최초 비밀번호 설정'이 열려 있을 때 새 비밀번호를 만들 수 있습니다.`,
+    onConfirm: async () => {
+      const cur = slots[no] || { ver: 0 };
+      await withTimeout(setDoc(slotRef(no), { ver: (cur.ver || 0) + 1, uid: null }), 15000);
+      notify("완료", `${studentLabel(no)} 학생의 비밀번호를 초기화했습니다.` + (signupOpen ? "" : "\n학생이 새로 만들려면 '최초 비밀번호 설정'을 열어 주세요."), "success");
+    },
+  });
 
   /* ── 엑셀 업로드 ── */
   const templateColumns = (ex) => {
@@ -1263,16 +1433,19 @@ const App = () => {
 
   /* ── 화면 ── */
   let content;
-  if (!authReady) {
-    content = <div className="min-h-screen flex flex-col gap-3 items-center justify-center font-bold text-emerald-600"><Spinner /><span>불러오는 중...</span></div>;
+  if (!authReady || checking) {
+    content = <div className="min-h-screen flex flex-col gap-3 items-center justify-center font-bold text-emerald-600"><Spinner /><span>{checking ? "계정 확인 중..." : "불러오는 중..."}</span></div>;
   } else if (!role) {
     content = <LoginScreen />;
   } else if (listenError) {
+    const msg = role === "student" && listenError.code === "permission-denied"
+      ? "접속 권한이 없습니다.\n선생님이 비밀번호를 초기화했을 수 있어요. 로그아웃한 뒤 번호를 눌러 비밀번호를 다시 만들어 주세요."
+      : errorMessage(listenError);
     content = (
       <div className="min-h-screen bg-red-50 flex items-center justify-center p-4">
         <div className="bg-white p-6 rounded-2xl shadow-xl w-full max-w-md border border-red-200 text-center">
           <h1 className="text-xl font-bold text-red-600 mb-3">⚠️ 데이터를 불러오지 못했습니다</h1>
-          <p className="text-gray-700 mb-5 text-sm whitespace-pre-wrap">{errorMessage(listenError)}</p>
+          <p className="text-gray-700 mb-5 text-sm whitespace-pre-wrap">{msg}</p>
           <div className="flex gap-2 justify-center">
             <button type="button" onClick={() => window.location.reload()} className="px-4 py-2 bg-emerald-600 text-white rounded-lg font-bold text-sm">새로고침</button>
             <button type="button" onClick={() => logout()} className="px-4 py-2 bg-gray-100 text-gray-700 rounded-lg font-bold text-sm">로그아웃</button>
@@ -1285,25 +1458,36 @@ const App = () => {
     const [chipCls, chipText] = SAVE_CHIP[saveStatus];
     const allComplete = isFinal && loaded && subjects.every((s) => semesterStatus(s, exam.sem, sd).complete);
     const selCls = "w-full p-2.5 md:p-3 rounded-lg border border-gray-300 focus:ring-2 outline-none font-bold shadow-sm text-base";
+    const doneNos = ALL_NOS.filter((n) => slots[n] && slots[n].uid);
+    const notDone = ALL_NOS.filter((n) => !(slots[n] && slots[n].uid));
 
     const studentPanel = (
       <>
         {isTeacher && !capture && (
           <div className="bg-blue-50 border border-blue-200 p-4 md:p-6 rounded-xl shadow-sm space-y-3">
-            <h2 className="text-blue-800 font-bold text-base md:text-lg flex items-center gap-2"><BookOpen className="w-5 h-5" /> 성적 일괄 업로드 (엑셀)</h2>
+            <details open className="bg-white rounded-lg border border-blue-100 p-3">
+              <summary className="cursor-pointer text-sm md:text-base font-bold text-blue-800">학생 계정 · 명단 관리</summary>
+              <div className="mt-3 space-y-3">
+                <div className="flex flex-wrap items-center gap-2">
+                  <span className="text-sm font-bold text-gray-700">최초 비밀번호 설정:</span>
+                  <Chip cls={signupOpen ? "bg-yellow-100 text-yellow-800" : "bg-gray-100 text-gray-600"}>{signupOpen ? "열림 · 학생이 직접 만들 수 있음" : "닫힘"}</Chip>
+                  <button type="button" onClick={toggleSignup} className={`px-4 py-1.5 rounded-lg font-bold text-sm text-white ${signupOpen ? "bg-gray-700 hover:bg-gray-800" : "bg-yellow-500 hover:bg-yellow-600"}`}>{signupOpen ? "닫기" : "열기"}</button>
+                </div>
+                <p className="text-xs text-gray-600 leading-relaxed">
+                  비밀번호 설정 완료 <b className="text-emerald-700">{doneNos.length}</b> / {STUDENT_COUNT}명
+                  {notDone.length > 0 && <span> · 미설정: {notDone.join(", ")}번</span>}
+                </p>
+                <button type="button" onClick={editRoster} className="px-4 py-2 rounded-lg border border-blue-200 text-blue-700 font-bold text-sm hover:bg-blue-50">학생 명단 등록/수정</button>
+                <p className="text-xs text-gray-500 leading-relaxed">학생이 비밀번호를 잊으면: 아래 '대상 학생'에서 그 학생을 고르고 <b>비밀번호 초기화</b> → 위 스위치 <b>열기</b> → 학생이 새로 만들기 → <b>닫기</b></p>
+              </div>
+            </details>
+            <h2 className="text-blue-800 font-bold text-base md:text-lg flex items-center gap-2 pt-1"><BookOpen className="w-5 h-5" /> 성적 일괄 업로드 (엑셀)</h2>
             <div className="grid md:grid-cols-2 gap-2">
               <button type="button" onClick={downloadTemplate} className="flex items-center justify-center gap-2 bg-white border border-blue-300 text-blue-700 px-4 py-3 rounded-lg font-bold hover:bg-blue-100 text-sm"><Download className="w-5 h-5" /> [{exam.label}] 양식 내려받기</button>
               <button type="button" onClick={() => fileRef.current && fileRef.current.click()} className="flex items-center justify-center gap-2 bg-blue-600 text-white px-4 py-3 rounded-lg font-bold hover:bg-blue-700 shadow-md text-sm"><Upload className="w-5 h-5" /> [{exam.label}] 엑셀 올리기</button>
               <input type="file" accept=".xlsx,.xls,.csv" className="hidden" ref={fileRef} onChange={handleUpload} />
             </div>
             <p className="text-xs text-blue-700 leading-relaxed">첫 열은 번호(또는 '1번 홍길동'), 학기말은 '국어_1차 / 국어_2차 / 국어_수행' 형식입니다. 저장 전에 확인 창이 뜹니다.</p>
-            <details className="bg-white rounded-lg border border-blue-100 p-3">
-              <summary className="cursor-pointer text-sm font-bold text-blue-800">데이터 관리 (학생 명단)</summary>
-              <div className="mt-3">
-                <button type="button" onClick={editRoster} className="px-4 py-2 rounded-lg border border-blue-200 text-blue-700 font-bold text-sm hover:bg-blue-50">학생 명단 등록/수정</button>
-              </div>
-              <p className="mt-2 text-xs text-gray-500 leading-relaxed">학생 비밀번호 분실 시: Firebase 콘솔 → Authentication에서 해당 계정(s01@… 형식)을 삭제한 뒤 같은 이메일로 다시 추가하세요. 성적은 그대로 유지됩니다.</p>
-            </details>
           </div>
         )}
 
@@ -1317,13 +1501,17 @@ const App = () => {
               <div className="flex-1">
                 <label className="block text-xs md:text-sm font-bold text-gray-700 mb-1.5">대상 학생</label>
                 {isTeacher && !capture ? (
-                  <div className="flex gap-1.5">
-                    <button type="button" onClick={() => setSelectedNo((n) => Math.max(1, n - 1))} className="px-2 rounded-lg border border-gray-300 bg-white"><ChevronL className="w-5 h-5" /></button>
-                    <select value={selectedNo} onChange={(e) => setSelectedNo(Number(e.target.value))} className={`${selCls} text-emerald-800 focus:ring-emerald-500`}>
-                      {ALL_NOS.map((n) => <option key={n} value={n}>{studentLabel(n)}</option>)}
-                    </select>
-                    <button type="button" onClick={() => setSelectedNo((n) => Math.min(STUDENT_COUNT, n + 1))} className="px-2 rounded-lg border border-gray-300 bg-white"><ChevronR className="w-5 h-5" /></button>
-                  </div>
+                  <>
+                    <div className="flex gap-1.5">
+                      <button type="button" onClick={() => setSelectedNo((n) => Math.max(1, n - 1))} className="px-2 rounded-lg border border-gray-300 bg-white"><ChevronL className="w-5 h-5" /></button>
+                      <select value={selectedNo} onChange={(e) => setSelectedNo(Number(e.target.value))} className={`${selCls} text-emerald-800 focus:ring-emerald-500`}>
+                        {ALL_NOS.map((n) => <option key={n} value={n}>{studentLabel(n)}</option>)}
+                      </select>
+                      <button type="button" onClick={() => setSelectedNo((n) => Math.min(STUDENT_COUNT, n + 1))} className="px-2 rounded-lg border border-gray-300 bg-white"><ChevronR className="w-5 h-5" /></button>
+                      <button type="button" onClick={() => resetStudentPin(selectedNo)} className="px-2 text-[11px] font-bold bg-red-50 text-red-600 rounded-lg border border-red-200 hover:bg-red-100 leading-tight whitespace-nowrap">비밀번호<br/>초기화</button>
+                    </div>
+                    <p className="mt-1 text-[11px] font-semibold text-gray-500">{slots[selectedNo] && slots[selectedNo].uid ? "✓ 비밀번호 설정 완료" : "아직 비밀번호 미설정"}</p>
+                  </>
                 ) : <div className="w-full p-2.5 md:p-3 rounded-lg border border-gray-300 bg-white font-bold text-emerald-800">{studentLabel(activeNo)}</div>}
               </div>
               <div className="flex-1">
@@ -1435,7 +1623,7 @@ const App = () => {
                   <span className="font-bold text-sm md:text-lg truncate">{isTeacher ? "김아름 선생님 모드" : studentLabel(myNo)}</span>
                 </div>
                 <div className="flex gap-3 items-center shrink-0">
-                  <button type="button" onClick={changePassword} className="flex items-center gap-1 text-xs md:text-sm font-semibold text-gray-500 hover:text-blue-600"><Lock className="w-4 h-4" /><span className="hidden md:inline">비밀번호 변경</span></button>
+                  {!isTeacher && <button type="button" onClick={changePassword} className="flex items-center gap-1 text-xs md:text-sm font-semibold text-gray-500 hover:text-blue-600"><Lock className="w-4 h-4" /><span className="hidden md:inline">비밀번호 변경</span></button>}
                   <button type="button" onClick={() => logout()} className="flex items-center gap-1 text-gray-500 hover:text-red-500 font-semibold text-xs md:text-sm"><LogOut className="w-4 h-4" /> 로그아웃</button>
                 </div>
               </div>
@@ -1448,6 +1636,7 @@ const App = () => {
                       {selfTest.ok ? `✓ 계산 검증 통과 (${selfTest.count.toLocaleString("ko-KR")}건)` : `✕ 계산 검증 실패 ${selfTest.fails.length}건`}
                     </Chip>
                   : <Chip cls="bg-gray-100 text-gray-500">계산 검증 중...</Chip>)}
+                {isTeacher && signupOpen && <Chip cls="bg-yellow-100 text-yellow-800">⚠ 최초 비밀번호 설정 열림</Chip>}
               </div>
             </div>
           )}
