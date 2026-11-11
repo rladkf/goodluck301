@@ -3,1093 +3,1485 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="robots" content="noindex, nofollow">
+  <meta name="referrer" content="strict-origin-when-cross-origin">
   <title>상정중 3-1 성적 향상 프로젝트</title>
-  
-  <script src="https://unpkg.com/react@18/umd/react.production.min.js" crossorigin></script>
-  <script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js" crossorigin></script>
-  <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+  <link rel="preconnect" href="https://cdn.jsdelivr.net">
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/static/pretendard.min.css">
+  <script src="https://cdn.jsdelivr.net/npm/react@18.3.1/umd/react.production.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/react-dom@18.3.1/umd/react-dom.production.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/@babel/standalone@7/babel.min.js"></script>
   <script src="https://cdn.tailwindcss.com"></script>
-  
-  <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
-  <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
-  
   <style>
     body { font-family: 'Pretendard', 'Malgun Gothic', sans-serif; }
     ::-webkit-scrollbar { width: 8px; height: 8px; }
     ::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 4px; }
-    input[type='radio'] { accent-color: #059669; }
-    /* 숫자 입력창 화살표 숨기기 */
-    input[type='number']::-webkit-outer-spin-button,
-    input[type='number']::-webkit-inner-spin-button {
-      -webkit-appearance: none;
-      margin: 0;
-    }
   </style>
 </head>
-<body>
-  <div id="root"></div>
+<body class="bg-emerald-50">
+<div id="root">
+  <div id="boot" style="min-height:100vh;display:flex;align-items:center;justify-content:center;font-weight:700;color:#059669;font-family:sans-serif">불러오는 중입니다...</div>
+</div>
+<noscript><p style="text-align:center;padding:24px">자바스크립트를 켜야 이용할 수 있습니다.</p></noscript>
+<script>
+  // 25초 안에 화면이 뜨지 않으면(학교망 차단 등) 안내
+  setTimeout(function () {
+    if (window.__APP_STARTED) return;
+    var b = document.getElementById('boot');
+    if (b) b.innerHTML = '<div style="text-align:center;line-height:1.8;color:#b91c1c;padding:16px">화면을 불러오지 못했습니다.<br>인터넷 연결을 확인하거나, 학교 와이파이라면 휴대폰 데이터로 바꿔 보세요.<br><button onclick="location.reload()" style="margin-top:12px;padding:8px 18px;border-radius:8px;background:#059669;color:#fff;border:0;font-weight:700">새로고침</button></div>';
+  }, 25000);
+</script>
 
-  <script type="text/babel" data-type="module">
-    import { initializeApp } from "https://www.gstatic.com/firebasejs/10.8.1/firebase-app.js";
-    import { getAuth, signInWithCustomToken, signInAnonymously, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/10.8.1/firebase-auth.js";
-    import { getFirestore, doc, setDoc, onSnapshot } from "https://www.gstatic.com/firebasejs/10.8.1/firebase-firestore.js";
+<script type="text/babel" data-type="module">
+import { initializeApp } from "https://www.gstatic.com/firebasejs/10.8.1/firebase-app.js";
+import { initializeAppCheck, ReCaptchaV3Provider } from "https://www.gstatic.com/firebasejs/10.8.1/firebase-app-check.js";
+import {
+  getAuth, setPersistence, browserSessionPersistence,
+  signInWithEmailAndPassword, signOut, onAuthStateChanged, updatePassword
+} from "https://www.gstatic.com/firebasejs/10.8.1/firebase-auth.js";
+import {
+  initializeFirestore, memoryLocalCache, doc, collection, collectionGroup, setDoc,
+  onSnapshot, writeBatch, deleteField, waitForPendingWrites
+} from "https://www.gstatic.com/firebasejs/10.8.1/firebase-firestore.js";
 
-    const { useState, useEffect, useRef } = React;
+const { useState, useEffect, useRef } = React;
 
-    const myFirebaseConfig = {
-      apiKey: "AIzaSyB4WVatO8I0UF-26VgxO2fSwGOTlMBl_7M",
-      authDomain: "goodluck301-175e3.firebaseapp.com",
-      projectId: "goodluck301-175e3",
-      storageBucket: "goodluck301-175e3.firebasestorage.app",
-      messagingSenderId: "741090437669",
-      appId: "1:741090437669:web:cf076250d558ff48996dcc"
-    };
+/* ═════════════════════════ 1. 설정 ═════════════════════════
+   ※ 아래 값은 Firebase 프로젝트의 '공개 식별자'입니다. 비밀번호가 아니며,
+     데이터 보호는 Firestore 보안 규칙이 담당합니다.                       */
+const firebaseConfig = {
+  apiKey: "AIzaSyAjyIYjoY7LrzIWPpyPO8GRsvVo-598glk",
+  authDomain: "taerin-rolling-paper.firebaseapp.com",
+  projectId: "taerin-rolling-paper",
+  storageBucket: "taerin-rolling-paper.firebasestorage.app",
+  messagingSenderId: "1051294698769",
+  appId: "1:1051294698769:web:a3dfacbc0d427ea58ad0b0"
+};
+const APP_CHECK_SITE_KEY = "";   // (선택) reCAPTCHA v3 사이트 키. 비워 두면 사용 안 함
 
-    const isCanvas = typeof __firebase_config !== 'undefined';
-    const firebaseConfig = isCanvas ? JSON.parse(__firebase_config) : myFirebaseConfig;
-    const app = initializeApp(firebaseConfig);
-    const auth = getAuth(app);
-    const db = getFirestore(app);
-    const appId = typeof __app_id !== 'undefined' ? __app_id : 'sangjeong-grade-analyzer';
+const app = initializeApp(firebaseConfig);
+if (APP_CHECK_SITE_KEY) {
+  initializeAppCheck(app, { provider: new ReCaptchaV3Provider(APP_CHECK_SITE_KEY), isTokenAutoRefreshEnabled: true });
+}
+const auth = getAuth(app);
+setPersistence(auth, browserSessionPersistence).catch(console.error);   // 탭을 닫으면 로그아웃
+// 메모리 캐시: 공용 PC에 성적이 남지 않음 / 롱폴링 자동 감지: 학교망 대응
+const db = initializeFirestore(app, { localCache: memoryLocalCache(), experimentalAutoDetectLongPolling: true });
 
-    // ✅ 기존 저장된 데이터를 날리지 않고 그대로 연동합니다.
-    const DOC_ID = 'sangjeong_v17_final'; 
+const EMAIL_DOMAIN = "taerin-rolling-paper.firebaseapp.com";   // 보안 규칙과 같아야 함
+const TEACHER_EMAIL = `teacher@${EMAIL_DOMAIN}`;
+const STUDENT_COUNT = 24;
+const STUDENT_MIN_PWD = 6;
+const TEACHER_MIN_PWD = 8;
+const IDLE_MINUTES = 30;
+const ROOT = "grade_students";
+const VERSION = "v19.1";
 
-    const withTimeout = (promise, ms, errorMessage) => {
-      let timeoutId;
-      const timeoutPromise = new Promise((_, reject) => {
-        timeoutId = setTimeout(() => reject(new Error(errorMessage)), ms);
-      });
-      return Promise.race([promise, timeoutPromise]).finally(() => clearTimeout(timeoutId));
-    };
+const ALL_NOS = Array.from({ length: STUDENT_COUNT }, (_, i) => i + 1);
+const sidOf = (no) => `s${String(no).padStart(2, "0")}`;
+const emailOf = (no) => `${sidOf(no)}@${EMAIL_DOMAIN}`;
+const examRef = (no, examId) => doc(db, ROOT, sidOf(no), "exams", examId);
 
-    const Award = ({className}) => <svg className={className} xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="8" r="7"/><polyline points="8.21 13.89 7 23 12 20 17 23 15.79 13.88"/></svg>;
-    const Info = ({className}) => <svg className={className} xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10"/><line x1="12" y1="16" x2="12" y2="12"/><line x1="12" y1="8" x2="12.01" y2="8"/></svg>;
-    const Lock = ({className}) => <svg className={className} xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>;
-    const User = ({className}) => <svg className={className} xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M19 21v-2a4 4 0 0 0-4-4H9a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>;
-    const LogOut = ({className}) => <svg className={className} xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/></svg>;
-    const Users = ({className}) => <svg className={className} xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M16 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="8.5" cy="7" r="4"/><line x1="20" y1="8" x2="20" y2="14"/><line x1="23" y1="11" x2="17" y2="11"/></svg>;
-    const Settings = ({className}) => <svg className={className} xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>;
-    const ImageIcon = ({className}) => <svg className={className} xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="3" width="18" height="18" rx="2" ry="2"/><circle cx="8.5" cy="8.5" r="1.5"/><polyline points="21 15 16 10 5 21"/></svg>;
-    const Target = ({className}) => <svg className={className} xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10"/><circle cx="12" cy="12" r="6"/><circle cx="12" cy="12" r="2"/></svg>;
-    const PenTool = ({className}) => <svg className={className} xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="m12 19 7-7 3 3-7 7-3-3z"/><path d="m18 13-1.5-7.5L2 2l3.5 14.5L13 18l5-5z"/><path d="m2 2 7.586 7.586"/><circle cx="11" cy="11" r="2"/></svg>;
-    const BookOpen = ({className}) => <svg className={className} xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M2 3h6a4 4 0 0 1 4 4v14a3 3 0 0 0-3-3H2z"/><path d="M22 3h-6a4 4 0 0 0-4 4v14a3 3 0 0 1 3-3h7z"/></svg>;
-    const Upload = ({className}) => <svg className={className} xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>;
+const EXAMS = [
+  { id: "s1e1", label: "3학년 1학기 1차시험", short: "1학기 1차", sem: 1, kind: "e1" },
+  { id: "s1e2", label: "3학년 1학기 2차시험", short: "1학기 2차", sem: 1, kind: "e2" },
+  { id: "s1f",  label: "3학년 1학기말 성적",  short: "1학기말",   sem: 1, kind: "final" },
+  { id: "s2e1", label: "3학년 2학기 1차시험", short: "2학기 1차", sem: 2, kind: "e1" },
+  { id: "s2e2", label: "3학년 2학기 2차시험", short: "2학기 2차", sem: 2, kind: "e2" },
+  { id: "s2f",  label: "3학년 2학기말 성적",  short: "2학기말",   sem: 2, kind: "final" },
+];
+const examById = Object.fromEntries(EXAMS.map((e) => [e.id, e]));
+const examIdOf = (sem, kind) => `s${sem}${kind === "final" ? "f" : kind}`;
+const SEQ = { e: ["s1e1", "s1e2", "s2e1", "s2e2"], f: ["s1f", "s2f"] };   // 직전 비교 순서
 
-    const students = [
-      "1번 짠낫민", "2번 구본준", "3번 김유림", "4번 김은성", "5번 문서준",
-      "6번 민경준", "7번 배진형", "8번 선지후", "9번 신정호", "10번 유태현",
-      "11번 조연우", "12번 조재혁", "13번 김라윤", "14번 김태린", "15번 김하은",
-      "16번 나하음", "17번 배지원", "18번 안유민", "19번 오소진", "20번 오윤지",
-      "21번 이다은", "22번 이한나", "23번 허주영", "24번 이세령"
-    ];
+// r1: 1차 반영비율(%), r2: 2차 반영비율(%), rp: 수행 만점(=반영비율)
+const SUBJECTS = {
+  1: [
+    { name: "국어", r1: 30, r2: 30, rp: 40 }, { name: "수학", r1: 25, r2: 25, rp: 50 },
+    { name: "영어", r1: 30, r2: 30, rp: 40 }, { name: "과학", r1: 30, r2: 30, rp: 40 },
+    { name: "사회", r1: 0,  r2: 70, rp: 30 }, { name: "역사", r1: 0,  r2: 40, rp: 60 },
+    { name: "도덕", r1: 0,  r2: 60, rp: 40 }, { name: "체육", r1: 0,  r2: 0,  rp: 100 },
+    { name: "미술", r1: 0,  r2: 0,  rp: 100 },
+  ],
+  2: [
+    { name: "국어", r1: 30, r2: 30, rp: 40 }, { name: "수학", r1: 30, r2: 30, rp: 40 },
+    { name: "영어", r1: 30, r2: 30, rp: 40 }, { name: "과학", r1: 30, r2: 30, rp: 40 },
+    { name: "사회", r1: 30, r2: 30, rp: 40 }, { name: "역사", r1: 30, r2: 30, rp: 40 },
+    { name: "도덕", r1: 30, r2: 30, rp: 40 }, { name: "체육", r1: 0,  r2: 0,  rp: 100 },
+    { name: "미술", r1: 0,  r2: 0,  rp: 100 },
+  ],
+};
+const subOf = (sem, name) => SUBJECTS[sem].find((s) => s.name === name) || null;
+const SUBJECT_COLORS = { 국어: "#ef4444", 수학: "#3b82f6", 영어: "#10b981", 과학: "#8b5cf6", 사회: "#f59e0b", 역사: "#a16207", 도덕: "#ec4899", 체육: "#14b8a6", 미술: "#64748b" };
+const GRADE_COLORS = { A: "#3b82f6", B: "#10b981", C: "#eab308", D: "#f97316", E: "#ef4444" };
 
-    const exams = [
-      "3학년 1학기 1차시험",
-      "3학년 1학기 2차시험",
-      "3학년 1학기말 성적",
-      "3학년 2학기 1차시험",
-      "3학년 2학기말 성적"
-    ];
+/* ═════════════════════════ 2. 정확한 계산 (정수 연산) ═════════════════════════
+   모든 점수는 0.1점 단위 정수(S)로 바꿔 계산합니다. 예: 87.5점 → 875
+   학기말 총점은 1/1000점 단위 정수(U)로 계산 후 소수 첫째 자리에서 반올림합니다.
+   (점수가 소수 둘째 자리까지 있는 학교라면 SCALE=100, DEC=2 로 바꾸면 됩니다.)    */
+const SCALE = 10;
+const DEC = 1;
+const UNIT = SCALE * 100;
 
-    const FIXED_SUBJECTS_SEM1 = [
-      { name: "국어", ratio1: 30, ratio2: 30, ratioPerf: 40 },
-      { name: "수학", ratio1: 25, ratio2: 25, ratioPerf: 50 },
-      { name: "영어", ratio1: 30, ratio2: 30, ratioPerf: 40 },
-      { name: "과학", ratio1: 30, ratio2: 30, ratioPerf: 40 },
-      { name: "사회", ratio1: 0,  ratio2: 70, ratioPerf: 30 },
-      { name: "역사", ratio1: 0,  ratio2: 40, ratioPerf: 60 },
-      { name: "도덕", ratio1: 0,  ratio2: 60, ratioPerf: 40 },
-      { name: "체육", ratio1: 0,  ratio2: 0,  ratioPerf: 100 },
-      { name: "미술", ratio1: 0,  ratio2: 0,  ratioPerf: 100 }
-    ];
+const isNum = (v) => v !== "" && v !== null && v !== undefined && Number.isFinite(Number(v));
+const clamp = (v, lo, hi) => Math.min(hi, Math.max(lo, v));
+const ensure = (o, k) => (o[k] = o[k] || {});
+const toS = (v) => (isNum(v) ? Math.round(Number(v) * SCALE) : null);
+const ceilDiv = (a, b) => Math.floor((a + b - 1) / b);                       // a ≥ 0, b > 0
+const roundDiv = (a, b) => (a < 0 ? -1 : 1) * Math.floor((2 * Math.abs(a) + b) / (2 * b));  // 반올림
+const fmtScaled = (n, dec) => {                                               // 정수 → 소수 문자열 (오차 없음)
+  const neg = n < 0, a = Math.abs(n), p = 10 ** dec;
+  const ip = Math.floor(a / p), fp = a % p;
+  let s = String(ip);
+  if (fp) s += "." + String(fp).padStart(dec, "0").replace(/0+$/, "");
+  return (neg ? "-" : "") + s;
+};
+const fmtS = (s) => fmtScaled(s, DEC);
 
-    const FIXED_SUBJECTS_SEM2 = [
-      { name: "국어", ratio1: 30, ratio2: 30, ratioPerf: 40 },
-      { name: "수학", ratio1: 30, ratio2: 30, ratioPerf: 40 },
-      { name: "영어", ratio1: 30, ratio2: 30, ratioPerf: 40 },
-      { name: "과학", ratio1: 30, ratio2: 30, ratioPerf: 40 },
-      { name: "사회", ratio1: 30, ratio2: 30, ratioPerf: 40 },
-      { name: "역사", ratio1: 30, ratio2: 30, ratioPerf: 40 },
-      { name: "도덕", ratio1: 30, ratio2: 30, ratioPerf: 40 },
-      { name: "체육", ratio1: 0,  ratio2: 0,  ratioPerf: 100 },
-      { name: "미술", ratio1: 0,  ratio2: 0,  ratioPerf: 100 }
-    ];
+const THREE_LEVEL = new Set(["체육", "미술"]);
+const cutsFor = (subj) => (THREE_LEVEL.has(subj) ? [["A", 80], ["B", 60]] : [["A", 90], ["B", 80], ["C", 70], ["D", 60]]);
+const lowestGrade = (subj) => (THREE_LEVEL.has(subj) ? "C" : "E");
+const gradesFor = (subj) => [...cutsFor(subj).map((c) => c[0]), lowestGrade(subj)];
+const gradeOfS = (s, subj) => { for (const [g, cut] of cutsFor(subj)) if (s >= cut * SCALE) return g; return lowestGrade(subj); };
+const gradeOfPoints = (p, subj) => gradeOfS(p * SCALE, subj);
 
-    // ✅ 과목별 맞춤 등급 계산 로직 (체육, 미술은 3단계, 나머지는 5단계)
-    const calculateGrade = (score, subjectName) => {
-      if (subjectName === "체육" || subjectName === "미술") {
-        if (score >= 80) return 'A';
-        if (score >= 60) return 'B';
-        return 'C';
-      } else {
-        // 기존 5단계 로직
-        if (score >= 90) return 'A';
-        if (score >= 80) return 'B';
-        if (score >= 70) return 'C';
-        if (score >= 60) return 'D';
-        return 'E';
-      }
-    };
+// 학기말 환산총점(U, 1/UNIT점) = 1차×r1% + 2차×r2% + 수행
+const semTotalU = (sub, e1, e2, perf) =>
+  (sub.r1 ? clamp(e1 || 0, 0, 100 * SCALE) * sub.r1 : 0) +
+  (sub.r2 ? clamp(e2 || 0, 0, 100 * SCALE) * sub.r2 : 0) +
+  (sub.rp ? clamp(perf || 0, 0, sub.rp * SCALE) * 100 : 0);
+const pointsOf = (U) => Math.floor((U + UNIT / 2) / UNIT);                    // 반올림 → 정수점
 
-    // 소수점 1자리 포맷팅 (정수면 그대로)
-    const formatScore = (s) => Number.isInteger(s) ? s : Number(s).toFixed(1);
+// 학기말 상태: 1·2차는 시험 화면 점수(단일 출처), 수행은 학기말 문서
+const semesterStatus = (sub, sem, sd) => {
+  const e1 = toS(sd?.[examIdOf(sem, "e1")]?.scores?.[sub.name]);
+  const e2 = toS(sd?.[examIdOf(sem, "e2")]?.scores?.[sub.name]);
+  const perf = toS(sd?.[examIdOf(sem, "final")]?.perf?.[sub.name]);
+  const parts = [[sub.r1, e1], [sub.r2, e2], [sub.rp, perf]];
+  const complete = parts.every(([r, v]) => r === 0 || v !== null);
+  const any = parts.some(([r, v]) => r > 0 && v !== null);
+  const U = semTotalU(sub, e1, e2, perf);
+  const points = pointsOf(U);
+  return { e1, e2, perf, complete, any, U, points, grade: complete ? gradeOfPoints(points, sub.name) : null };
+};
 
-    const StandardRow = ({ subject, isFirstExam, isSecondExam, isSem1Exam1, onUpdate, isCapturing, currentUserRole }) => {
-      const [target, setTarget] = useState(subject.target !== undefined ? subject.target : "");
-      const [prevScore, setPrevScore] = useState(subject.prevScore !== undefined ? subject.prevScore : ""); 
-      const [score, setScore] = useState(subject.score !== undefined ? subject.score : ""); 
-      const [expectedPerf, setExpectedPerf] = useState(subject.expectedPerf !== undefined ? subject.expectedPerf : subject.ratioPerf); 
+// 남은 항목 X(0.1점 단위)에서 등급별로 필요한 구간. knownU: 확정된 부분, coef: X 1단위당 총점 기여(U)
+const project = (subj, knownU, coef, maxS) => {
+  const rows = [];
+  let hi = maxS;
+  for (const [g, cut] of cutsFor(subj)) {
+    const rem = cut * UNIT - UNIT / 2 - knownU;          // 반올림해서 cut 이 되는 최소 총점까지 남은 양
+    const lo = rem <= 0 ? 0 : ceilDiv(rem, coef);
+    if (lo > hi) continue;                                // 도달 불가
+    rows.push({ grade: g, lo, hi });
+    if (lo === 0) break;                                  // 이 등급 이상 확정
+    hi = lo - 1;
+  }
+  return rows;
+};
+// 화면과 자동 검증이 함께 쓰는 '필요 점수' 계산
+const projectionFor = (mode, sub, e1S, e2S, expPerf) => {
+  if (mode === "e1") {
+    if (!sub.r1) return { msg: "1차 미실시" };
+    if (e1S === null) return { msg: "1차 점수 입력 필요" };
+    if (sub.r2) return { label: "2차", maxS: 100 * SCALE, rows: project(sub.name, e1S * sub.r1 + clamp(expPerf, 0, sub.rp) * SCALE * 100, sub.r2, 100 * SCALE) };
+    return { label: "수행", maxS: sub.rp * SCALE, rows: project(sub.name, e1S * sub.r1, 100, sub.rp * SCALE) };
+  }
+  if (!sub.r2) return { msg: "-" };
+  if (sub.r1 && e1S === null) return { msg: "1차 점수 입력 필요" };
+  if (e2S === null) return { msg: "2차 점수 입력 필요" };
+  return { label: "수행", maxS: sub.rp * SCALE, rows: project(sub.name, (sub.r1 ? e1S * sub.r1 : 0) + e2S * sub.r2, 100, sub.rp * SCALE) };
+};
 
-      useEffect(() => {
-        setTarget(subject.target !== undefined ? subject.target : "");
-        setPrevScore(subject.prevScore !== undefined ? subject.prevScore : "");
-        setScore(subject.score !== undefined ? subject.score : "");
-        if (subject.expectedPerf !== undefined) setExpectedPerf(subject.expectedPerf);
-        else setExpectedPerf(subject.ratioPerf);
-      }, [subject.target, subject.prevScore, subject.score, subject.expectedPerf, subject.ratioPerf]);
+/* ═════════════════════════ 3. 비교·통계 ═════════════════════════ */
+const takes = (examId, name) => {
+  const e = examById[examId], s = subOf(e.sem, name);
+  return !!s && (e.kind === "final" || (e.kind === "e1" ? s.r1 : s.r2) > 0);
+};
+const examSubjects = (exam) => SUBJECTS[exam.sem].filter((s) => takes(exam.id, s.name));
+const prevExamFor = (examId, name) => {
+  const seq = examById[examId].kind === "final" ? SEQ.f : SEQ.e;
+  for (let i = seq.indexOf(examId) - 1; i >= 0; i--) if (takes(seq[i], name)) return seq[i];
+  return null;
+};
+// 한 학생·시험·과목 점수(S). 학기말은 모든 항목이 입력된 환산총점(정수점)만
+const valueS = (sd, examId, name) => {
+  if (!takes(examId, name)) return null;
+  const e = examById[examId];
+  if (e.kind !== "final") return toS(sd?.[examId]?.scores?.[name]);
+  const st = semesterStatus(subOf(e.sem, name), e.sem, sd);
+  return st.complete ? st.points * SCALE : null;
+};
+const deltaInfo = (sd, examId, name) => {
+  const prevExam = prevExamFor(examId, name);
+  if (!prevExam) return { prevExam: null, prev: null, delta: null };
+  const cur = valueS(sd, examId, name), prev = valueS(sd, prevExam, name);
+  return { prevExam, prev, delta: cur !== null && prev !== null ? cur - prev : null };
+};
+const studentSummary = (sd, examId) => {
+  const subs = examSubjects(examById[examId]);
+  const vals = {}, prevs = {}, deltas = {};
+  let sum = 0, n = 0, dsum = 0, dn = 0;
+  for (const s of subs) {
+    const v = valueS(sd, examId, s.name), d = deltaInfo(sd, examId, s.name);
+    vals[s.name] = v; prevs[s.name] = d.prev; deltas[s.name] = d.delta;
+    if (v !== null) { sum += v; n++; }
+    if (d.delta !== null) { dsum += d.delta; dn++; }
+  }
+  return { vals, prevs, deltas, sum, n, dsum, dn, total: subs.length,
+    avgX: n ? roundDiv(sum * 10, n) : null,          // X 단위 = 0.01점 (SCALE=10일 때)
+    avgDeltaX: dn ? roundDiv(dsum * 10, dn) : null };
+};
+const fmtX = (x) => fmtScaled(x, DEC + 1);
+const xToPt = (x) => (x === null ? null : x / (SCALE * 10));
+const subjectStats = (dataByNo, examId, sub) => {
+  const vals = ALL_NOS.map((no) => valueS(dataByNo[no], examId, sub.name)).filter((v) => v !== null).sort((a, b) => a - b);
+  const prevExam = prevExamFor(examId, sub.name);
+  const pv = prevExam ? ALL_NOS.map((no) => valueS(dataByNo[no], prevExam, sub.name)).filter((v) => v !== null) : [];
+  const n = vals.length, pn = pv.length;
+  const sum = vals.reduce((a, b) => a + b, 0), psum = pv.reduce((a, b) => a + b, 0);
+  const dist = {};
+  gradesFor(sub.name).forEach((g) => { dist[g] = 0; });
+  vals.forEach((v) => { dist[gradeOfS(v, sub.name)]++; });
+  return {
+    n, prevExam, dist,
+    meanX: n ? roundDiv(sum * 10, n) : null,
+    prevMeanX: pn ? roundDiv(psum * 10, pn) : null,
+    changeX: n && pn ? roundDiv(sum * 10 * pn - psum * 10 * n, n * pn) : null,
+    medianX: n ? (n % 2 ? vals[(n - 1) / 2] * 10 : (vals[n / 2 - 1] + vals[n / 2]) * 5) : null,
+    max: n ? vals[n - 1] : null, min: n ? vals[0] : null,
+    sd: n ? Math.sqrt(vals.reduce((a, v) => a + (v - sum / n) ** 2, 0) / n) / SCALE : null,
+  };
+};
+const cmpFrac = (x, y) => x.num * y.den - y.num * x.den;
+const nonEmpty = (m) => !!m && Object.keys(m).length > 0;
+const hasData = (d) => !!d && (nonEmpty(d.scores) || nonEmpty(d.perf) || nonEmpty(d.plan?.targets) || !!d.plan?.resolution);
 
-      const handleBlur = (field, val, setter) => {
-        let finalVal = val;
-        // 💡 실수(Float) 소수점 그대로 저장하여 반올림 방지
-        if (val !== "") finalVal = Math.max(0, Math.min(100, Number(val))); 
-        setter(finalVal);
-        if (finalVal !== subject[field]) onUpdate(subject.name, field, finalVal);
-      };
+/* ═════════════════════════ 4. 계산 자동 검증 ═════════════════════════ */
+const runSelfTests = () => {
+  const fails = [];
+  let count = 0;
+  const eq = (name, got, exp) => { count++; if (got !== exp) fails.push(`${name}: ${got} ≠ ${exp}`); };
 
-      const r1 = subject.ratio1;
-      const r2 = subject.ratio2;
-      const rp = subject.ratioPerf;
-      const isSkipped = (isFirstExam && r1 === 0) || (isSecondExam && r2 === 0);
-      const targetNum = Number(target);
-      const scoreNum = Number(score);
-      const hasTarget = target !== "" && !isNaN(targetNum);
-      const hasScore = score !== "" && !isNaN(scoreNum);
+  // (1) 학기말 고정 사례
+  [
+    [1, "국어", 85, 88, 36, "87.9", 88, "B"],
+    [1, "국어", 85, 80, 40, "89.5", 90, "A"],
+    [1, "국어", 85, 79.9, 40, "89.47", 89, "B"],
+    [1, "수학", 90, 90, 45, "90", 90, "A"],
+    [1, "사회", null, 85.5, 25, "84.85", 85, "B"],
+    [1, "역사", null, 100, 60, "100", 100, "A"],
+    [1, "체육", null, null, 79.5, "79.5", 80, "A"],
+    [1, "체육", null, null, 59.4, "59.4", 59, "C"],
+    [2, "사회", 77.7, 66.6, 33, "76.29", 76, "C"],
+    [1, "국어", 0, 0, 0, "0", 0, "E"],
+  ].forEach(([sem, name, e1, e2, perf, raw, pts, g], i) => {
+    const sub = subOf(sem, name);
+    const U = semTotalU(sub, toS(e1), toS(e2), toS(perf));
+    eq(`학기말${i}-원점수`, fmtScaled(U, DEC + 2), raw);
+    eq(`학기말${i}-반올림`, pointsOf(U), pts);
+    eq(`학기말${i}-성취도`, gradeOfPoints(pointsOf(U), name), g);
+  });
 
-      let diffDisplay = <span className="text-gray-400 font-bold">-</span>;
-      if (!isSkipped && hasTarget && hasScore) {
-        const diffNum = Math.round((scoreNum - targetNum) * 10) / 10;
-        if (diffNum > 0) diffDisplay = <span className="text-red-500 font-bold">+{diffNum}</span>;
-        else if (diffNum < 0) diffDisplay = <span className="text-blue-500 font-bold">{diffNum}</span>;
-        else diffDisplay = <span className="text-gray-800 font-bold">0</span>;
-      }
+  // (2) 반올림 경계 전수 검사
+  for (let U = 0; U <= 100 * UNIT; U++) {
+    const ref = Math.floor(U / UNIT) + ((U % UNIT) >= UNIT / 2 ? 1 : 0);
+    count++;
+    if (pointsOf(U) !== ref) { fails.push(`반올림 U=${U}`); break; }
+  }
 
-      // 💡 등급 계산에 과목명(subject.name)을 함께 넘겨줍니다.
-      const currentGrade = (!isSkipped && hasScore) ? calculateGrade(scoreNum, subject.name) : "-";
+  // (3) 표시·보조 함수
+  eq("fmt1", fmtScaled(875, 1), "87.5"); eq("fmt2", fmtScaled(-25, 1), "-2.5");
+  eq("fmt3", fmtScaled(0, 1), "0"); eq("fmt4", fmtScaled(1000, 1), "100"); eq("fmt5", fmtScaled(8505, 2), "85.05");
+  eq("rd1", roundDiv(5, 2), 3); eq("rd2", roundDiv(-5, 2), -3); eq("rd3", roundDiv(7, 3), 2);
+  eq("toS1", toS(87.3), 873); eq("toS2", toS(0.1 + 0.2), 3);
 
-      let firstExamNextGradeMsg = null;
-      if (isSem1Exam1) {
-        if (isSkipped) {
-          firstExamNextGradeMsg = <span className="text-sm text-gray-500">1차 미실시</span>;
-        } else if (hasScore) {
-          let targetElements = [];
-          const currentAcquired = scoreNum * (r1 / 100);
-          const perfAcquired = expectedPerf;
-          const gradeColors = { 'A': 'text-blue-600', 'B': 'text-emerald-600', 'C': 'text-yellow-600', 'D': 'text-orange-500' };
+  // (4) 직전 대비·평균
+  const mock = { s1e1: { scores: { 국어: 85 } }, s1e2: { scores: { 국어: 88.5, 사회: 70 } }, s2e1: { scores: { 국어: 80, 사회: 75.5 } } };
+  eq("변화1", deltaInfo(mock, "s1e2", "국어").delta, 35);
+  eq("변화2", deltaInfo(mock, "s1e2", "사회").delta, null);
+  eq("변화3", deltaInfo(mock, "s2e1", "사회").delta, 55);
+  eq("변화4", deltaInfo(mock, "s2e1", "국어").delta, -85);
+  eq("평균1", fmtX(studentSummary(mock, "s2e1").avgX), "77.75");
+  const mockF = { s1e1: { scores: { 국어: 85 } }, s1e2: { scores: { 국어: 80 } }, s1f: { perf: { 국어: 40 } } };
+  eq("학기말값", valueS(mockF, "s1f", "국어"), 900);
 
-          // 체육, 미술은 1차 시험 미실시라 이 블록을 타지 않지만, 일반 과목을 위해 5단계 기준으로 계산
-          const gradeTargets = [
-            { grade: 'A', total: 90 },
-            { grade: 'B', total: 80 },
-            { grade: 'C', total: 70 },
-            { grade: 'D', total: 60 }
-          ];
-
-          let previousMin = r2 > 0 ? 100.1 : rp + 0.1;
-          const examType = r2 > 0 ? "2차" : "수행";
-          let isHighestGrade = true;
-
-          // ✅ 0.1점 단위로 깐깐하고 정확하게 계산하도록 알고리즘 업그레이드
-          gradeTargets.forEach(target => {
-            const pointsNeeded = target.total - currentAcquired;
-            const neededFrom2nd = pointsNeeded - perfAcquired;
-            
-            if (r2 > 0) {
-              const reqScoreRaw = neededFrom2nd / (r2 / 100);
-              const minScore = Math.max(0, Math.ceil(reqScoreRaw * 10) / 10);
-              const maxScore = Math.min(100, Math.round((previousMin - 0.1) * 10) / 10);
-              
-              if (minScore <= 100 && minScore <= maxScore) {
-                if (isHighestGrade) {
-                  targetElements.push(
-                    <div key={target.grade} className={`font-bold text-[11px] md:text-[12px] leading-snug ${gradeColors[target.grade]}`}>
-                      {target.grade}등급을 위해 {examType} {formatScore(minScore)}점 이상 필요
-                    </div>
-                  );
-                  isHighestGrade = false;
-                } else {
-                  targetElements.push(
-                    <div key={target.grade} className={`font-bold text-[11px] md:text-[12px] leading-snug ${gradeColors[target.grade]}`}>
-                      {target.grade}등급을 위해 {examType} {formatScore(minScore)}점~{formatScore(maxScore)}점 필요
-                    </div>
-                  );
-                }
-                previousMin = minScore;
-              }
-            } else {
-              const minPerf = Math.max(0, Math.ceil(pointsNeeded * 10) / 10);
-              const maxPerf = Math.min(rp, Math.round((previousMin - 0.1) * 10) / 10);
-              
-              if (minPerf <= rp && minPerf <= maxPerf) {
-                if (isHighestGrade) {
-                  targetElements.push(
-                    <div key={target.grade} className={`font-bold text-[11px] md:text-[12px] leading-snug ${gradeColors[target.grade]}`}>
-                      {target.grade}등급을 위해 {examType} {formatScore(minPerf)}점 이상 필요
-                    </div>
-                  );
-                  isHighestGrade = false;
-                } else {
-                  targetElements.push(
-                    <div key={target.grade} className={`font-bold text-[11px] md:text-[12px] leading-snug ${gradeColors[target.grade]}`}>
-                      {target.grade}등급을 위해 {examType} {formatScore(minPerf)}점~{formatScore(maxPerf)}점 필요
-                    </div>
-                  );
-                }
-                previousMin = minPerf;
-              }
-            }
-          });
-
-          if (targetElements.length === 0) {
-            targetElements.push(<div key="E" className="font-bold text-[11px] md:text-[12px] leading-snug text-red-500">향상 불가 (E등급)</div>);
+  // (5) '다음 등급' 안내 ↔ 실제 학기말 계산 전수 대조 (0.1점 단위)
+  const brute = (tag, sub, proj, totalAt) => {
+    const order = gradesFor(sub.name);
+    for (let x = 0; x <= proj.maxS; x++) {
+      count++;
+      const actual = gradeOfPoints(pointsOf(totalAt(x)), sub.name);
+      const row = proj.rows.find((r) => x >= r.lo && x <= r.hi);
+      const last = proj.rows[proj.rows.length - 1];
+      const ok = row ? row.grade === actual
+        : last ? order.indexOf(actual) > order.indexOf(last.grade) : actual === lowestGrade(sub.name);
+      if (!ok) { fails.push(`${tag} x=${fmtS(x)} 안내≠실제(${actual})`); return; }
+    }
+  };
+  for (const sem of [1, 2]) {
+    for (const sub of SUBJECTS[sem]) {
+      if (sub.r1) {
+        for (const e1 of [0, 55.5, 77.7, 85, 99.9, 100]) {
+          for (const perf of [0, Math.floor(sub.rp / 2), sub.rp - 1, sub.rp]) {
+            const p = projectionFor("e1", sub, toS(e1), null, perf);
+            if (p.rows) brute(`${sem}학기 ${sub.name} 1차${e1}/수행${perf}`, sub, p,
+              (x) => sub.r2 ? semTotalU(sub, toS(e1), x, perf * SCALE) : semTotalU(sub, toS(e1), 0, x));
           }
-
-          firstExamNextGradeMsg = (
-            <div className="flex flex-col items-center justify-center gap-1.5 py-1">
-              <div className="flex items-center gap-1 text-[11px] md:text-xs text-yellow-800 font-semibold bg-yellow-100/60 px-1.5 py-1 rounded shadow-sm border border-yellow-200 mb-0.5">
-                수행 예상: 
-                {!isCapturing ? (
-                  <select value={expectedPerf} onChange={(e) => { const val = Number(e.target.value); setExpectedPerf(val); onUpdate(subject.name, 'expectedPerf', val); }} className="rounded outline-none bg-white text-yellow-900 font-bold px-0.5 cursor-pointer hover:bg-gray-50">
-                    {Array.from({ length: rp + 1 }, (_, i) => rp - i).map(num => <option key={num} value={num}>{num}점</option>)}
-                  </select>
-                ) : (
-                  <span className="font-bold">{expectedPerf}점</span>
-                )}
-              </div>
-              <div className="flex flex-col gap-0.5 text-center w-full">
-                {targetElements}
-              </div>
-            </div>
-          );
-        } else {
-          firstExamNextGradeMsg = <span className="text-xs text-gray-400">점수 입력 필요</span>;
         }
       }
-
-      return (
-        <tr className={`border-b border-gray-100 ${isSkipped ? 'bg-gray-100/50' : 'hover:bg-gray-50'}`}>
-          <td className="p-2 font-bold text-gray-800 text-center bg-gray-50 border-r border-gray-100 text-sm whitespace-nowrap">
-            {subject.name}
-          </td>
-          {isSecondExam && (
-            <td className={`p-1 border-r border-gray-100 ${r1 === 0 ? 'bg-gray-100/50' : ''}`}>
-              {isSkipped || r1 === 0 ? <div className="text-center text-gray-400 text-xs font-bold">미실시</div> : (
-                <div className="flex justify-center items-center">
-                  {/* ✅ 학생 권한일 때는 실제 점수를 수정 못하도록 잠금 (disabled) */}
-                  {!isCapturing ? (
-                    <input type="number" step="any" disabled={currentUserRole === 'student'} value={prevScore} onChange={(e) => setPrevScore(e.target.value)} onBlur={() => handleBlur('prevScore', prevScore, setPrevScore)} placeholder="1차" className={`w-12 px-1 py-1 text-center border rounded font-bold outline-none text-sm ${currentUserRole === 'student' ? 'bg-gray-100 text-gray-500 cursor-not-allowed' : 'bg-transparent text-gray-700'}`} />
-                  ) : (
-                    <div className="w-12 px-1 py-1 text-center font-bold text-gray-700 text-sm">{prevScore !== "" ? formatScore(Number(prevScore)) : "-"}</div>
-                  )}
-                </div>
-              )}
-            </td>
-          )}
-          <td className="p-1 border-r border-gray-100">
-            {isSkipped ? <div className="text-center text-gray-400 text-xs">-</div> : (
-              <div className="flex justify-center items-center">
-                {!isCapturing ? (
-                  <input type="number" step="any" value={target} onChange={(e) => setTarget(e.target.value)} onBlur={() => handleBlur('target', target, setTarget)} placeholder="목표" className="w-12 px-1 py-1 text-center border rounded bg-white font-bold text-emerald-700 outline-none text-sm shadow-sm" />
-                ) : (
-                  <div className="w-12 px-1 py-1 text-center font-bold text-emerald-700 text-sm">{target !== "" ? formatScore(Number(target)) : "-"}</div>
-                )}
-              </div>
-            )}
-          </td>
-          <td className="p-1 border-r border-gray-100">
-            {isSkipped ? <div className="text-center text-gray-400 text-xs font-bold">미실시</div> : (
-              <div className="flex justify-center items-center">
-                {/* ✅ 학생 권한일 때는 실제 점수를 수정 못하도록 잠금 */}
-                {!isCapturing ? (
-                  <input type="number" step="any" disabled={currentUserRole === 'student'} value={score} onChange={(e) => setScore(e.target.value)} onBlur={() => handleBlur('score', score, setScore)} placeholder="획득" className={`w-12 px-1 py-1 text-center border rounded font-bold outline-none text-sm shadow-sm ${currentUserRole === 'student' ? 'bg-gray-100 text-gray-500 cursor-not-allowed' : 'bg-white'}`} />
-                ) : (
-                  <div className="w-12 px-1 py-1 text-center font-bold text-sm">{score !== "" ? formatScore(Number(score)) : "-"}</div>
-                )}
-              </div>
-            )}
-          </td>
-          <td className="p-1 text-center text-sm">{diffDisplay}</td>
-          <td className="p-1 text-center border-r border-gray-100">
-            <span className={`inline-block w-6 h-6 leading-6 rounded-full font-bold text-xs ${currentGrade === 'A' ? 'bg-blue-100 text-blue-700' : currentGrade === 'B' ? 'bg-green-100 text-green-700' : currentGrade === 'C' ? 'bg-yellow-100 text-yellow-700' : currentGrade === 'D' ? 'bg-orange-100 text-orange-700' : currentGrade === 'E' ? 'bg-red-100 text-red-700' : 'bg-gray-100 text-gray-400'}`}>
-              {currentGrade}
-            </span>
-          </td>
-          {isSem1Exam1 && (
-            <td className="p-1 text-center align-middle bg-yellow-50">{firstExamNextGradeMsg}</td>
-          )}
-        </tr>
-      );
-    };
-
-    const SemesterRow = ({ subject, onUpdate, isCapturing, currentUserRole }) => {
-      const updateField = (field, val) => onUpdate(subject.name, field, val);
-      const r1 = subject.ratio1, r2 = subject.ratio2, rp = subject.ratioPerf;
-      
-      const s1 = subject.score1 !== undefined && subject.score1 !== "" ? Number(subject.score1) : null;
-      const s2 = subject.score2 !== undefined && subject.score2 !== "" ? Number(subject.score2) : null;
-      const sp = subject.scorePerf !== undefined && subject.scorePerf !== "" ? Number(subject.scorePerf) : null;
-      const hasAnyScore = s1 !== null || s2 !== null || sp !== null;
-      
-      // ✅ 점수 계산 시 Math.max/min을 거쳐도 실수형이 유지됩니다.
-      const safeS1 = Math.max(0, Math.min(100, s1 || 0));
-      const safeS2 = Math.max(0, Math.min(100, s2 || 0));
-      const safeSp = Math.max(0, Math.min(rp, sp || 0));
-
-      const rawTotalScore = hasAnyScore ? ((safeS1 * (r1/100)) + (safeS2 * (r2/100)) + safeSp) : 0;
-      
-      // ✅ 학기말 성적의 환산총점은 반올림(Math.round)하여 정수로 만듭니다.
-      const roundedTotalScore = hasAnyScore ? Math.round(rawTotalScore) : 0;
-      
-      // 💡 등급 계산 시 반올림된 총점과 과목명을 함께 넘겨줍니다.
-      const currentGrade = hasAnyScore ? calculateGrade(roundedTotalScore, subject.name) : "-";
-
-      const handleBlur = (field, maxVal, currentVal) => {
-        if (currentVal !== "" && currentVal !== null && currentVal !== undefined) {
-           const clamped = Math.max(0, Math.min(maxVal, Number(currentVal)));
-           if (clamped !== Number(currentVal)) updateField(field, clamped);
+      if (sub.r2) {
+        for (const e1 of sub.r1 ? [0, 66.6, 85, 100] : [null]) {
+          for (const e2 of [0, 70.3, 89.9, 100]) {
+            const p = projectionFor("e2", sub, toS(e1), toS(e2), 0);
+            if (p.rows) brute(`${sem}학기 ${sub.name} 1차${e1}/2차${e2}`, sub, p, (x) => semTotalU(sub, toS(e1), toS(e2), x));
+          }
         }
-      };
+      }
+    }
+  }
+  return { ok: fails.length === 0, count, fails };
+};
 
-      return (
-        <tr className="border-b border-gray-100 hover:bg-gray-50">
-          <td className="p-2 font-bold text-gray-800 text-center bg-purple-50 border-r border-gray-100 text-sm whitespace-nowrap">{subject.name}</td>
-          <td className="p-1 border-r border-gray-100 bg-white">
-            <div className="flex justify-center items-center gap-0.5 font-semibold text-gray-600 text-xs">
-              <span className={r1 === 0 ? "text-gray-300" : "text-purple-700"}>{r1}</span>:
-              <span className={r2 === 0 ? "text-gray-300" : "text-purple-700"}>{r2}</span>:
-              <span className={rp === 0 ? "text-gray-300" : "text-purple-700"}>{rp}</span>
-            </div>
+/* ═════════════════════════ 5. 기타 도우미 ═════════════════════════ */
+const withTimeout = (promise, ms) => {
+  let t;
+  const timeout = new Promise((_, rej) => { t = setTimeout(() => { const e = new Error("timeout"); e.code = "timeout"; rej(e); }, ms); });
+  return Promise.race([promise, timeout]).finally(() => clearTimeout(t));
+};
+const BAD_LOGIN = "번호(아이디) 또는 비밀번호가 올바르지 않습니다.";
+const NETWORK = "서버에 연결할 수 없습니다. 인터넷 연결을 확인해 주세요.\n학교 와이파이에서만 안 된다면 휴대폰 데이터로 바꿔 새로고침해 보세요.";
+const ERR = {
+  "permission-denied": "권한이 없습니다.\n(선생님: 보안 규칙 게시 여부와 계정 이메일을 확인해 주세요.)",
+  "unavailable": NETWORK,
+  "timeout": "서버 응답이 늦습니다. 잠시 후 다시 확인해 주세요.",
+  "auth/invalid-credential": BAD_LOGIN, "auth/invalid-login-credentials": BAD_LOGIN,
+  "auth/wrong-password": BAD_LOGIN, "auth/user-not-found": BAD_LOGIN, "auth/invalid-email": BAD_LOGIN,
+  "auth/too-many-requests": "로그인 시도가 너무 많아 잠시 잠겼습니다. 몇 분 뒤 다시 시도해 주세요.",
+  "auth/network-request-failed": NETWORK,
+  "auth/requires-recent-login": "보안을 위해 로그아웃 후 다시 로그인한 다음 변경해 주세요.",
+  "auth/weak-password": "비밀번호가 너무 짧습니다.",
+  "auth/password-does-not-meet-requirements": "비밀번호 정책에 맞지 않습니다. 더 길게 정해 주세요.",
+  "auth/user-disabled": "사용이 중지된 계정입니다. 선생님께 문의하세요.",
+};
+const errorMessage = (e) => (e && ERR[e.code]) || `오류가 발생했습니다.\n(${(e && (e.code || e.message)) || "알 수 없음"})`;
+
+// 무거운 라이브러리는 필요할 때만 불러오기
+const LIBS = {
+  chart: { url: "https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js", test: () => window.Chart,
+           init: () => { window.Chart.defaults.font.family = "'Pretendard','Malgun Gothic',sans-serif"; } },
+  xlsx: { url: "https://cdn.sheetjs.com/xlsx-0.20.3/package/dist/xlsx.full.min.js", test: () => window.XLSX },
+  h2c: { url: "https://cdn.jsdelivr.net/npm/html2canvas@1.4.1/dist/html2canvas.min.js", test: () => window.html2canvas },
+};
+const libPromises = {};
+const loadLib = (name) => {
+  const lib = LIBS[name];
+  if (lib.test()) return Promise.resolve();
+  if (!libPromises[name]) {
+    libPromises[name] = new Promise((res, rej) => {
+      const s = document.createElement("script");
+      s.src = lib.url; s.async = true;
+      s.onload = () => { if (lib.test()) { if (lib.init) lib.init(); res(); } else rej(new Error("load")); };
+      s.onerror = () => { delete libPromises[name]; rej(new Error("load")); };
+      document.head.appendChild(s);
+    });
+  }
+  return libPromises[name];
+};
+const useLib = (name) => {
+  const [state, setState] = useState(LIBS[name].test() ? "ready" : "loading");
+  useEffect(() => {
+    if (state === "ready") return;
+    loadLib(name).then(() => setState("ready")).catch(() => setState("failed"));
+  }, []);
+  return state;
+};
+
+/* ═════════════════════════ 6. 아이콘·공용 UI ═════════════════════════ */
+const mk = (children) => ({ className }) => (
+  <svg className={className} xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">{children}</svg>
+);
+const Award = mk(<><circle cx="12" cy="8" r="7"/><polyline points="8.21 13.89 7 23 12 20 17 23 15.79 13.88"/></>);
+const Info = mk(<><circle cx="12" cy="12" r="10"/><line x1="12" y1="16" x2="12" y2="12"/><line x1="12" y1="8" x2="12.01" y2="8"/></>);
+const Lock = mk(<><rect x="3" y="11" width="18" height="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></>);
+const User = mk(<><path d="M19 21v-2a4 4 0 0 0-4-4H9a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></>);
+const Users = mk(<><path d="M16 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="8.5" cy="7" r="4"/><line x1="20" y1="8" x2="20" y2="14"/><line x1="23" y1="11" x2="17" y2="11"/></>);
+const LogOut = mk(<><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/></>);
+const ImageIcon = mk(<><rect x="3" y="3" width="18" height="18" rx="2" ry="2"/><circle cx="8.5" cy="8.5" r="1.5"/><polyline points="21 15 16 10 5 21"/></>);
+const Target = mk(<><circle cx="12" cy="12" r="10"/><circle cx="12" cy="12" r="6"/><circle cx="12" cy="12" r="2"/></>);
+const PenTool = mk(<><path d="m12 19 7-7 3 3-7 7-3-3z"/><path d="m18 13-1.5-7.5L2 2l3.5 14.5L13 18l5-5z"/><path d="m2 2 7.586 7.586"/><circle cx="11" cy="11" r="2"/></>);
+const BookOpen = mk(<><path d="M2 3h6a4 4 0 0 1 4 4v14a3 3 0 0 0-3-3H2z"/><path d="M22 3h-6a4 4 0 0 0-4 4v14a3 3 0 0 1 3-3h7z"/></>);
+const Upload = mk(<><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></>);
+const Download = mk(<><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></>);
+const BarChart = mk(<><line x1="12" y1="20" x2="12" y2="10"/><line x1="18" y1="20" x2="18" y2="4"/><line x1="6" y1="20" x2="6" y2="16"/></>);
+const ChevronL = mk(<polyline points="15 18 9 12 15 6"/>);
+const ChevronR = mk(<polyline points="9 18 15 12 9 6"/>);
+
+const Spinner = ({ className = "w-8 h-8" }) => (
+  <svg className={`animate-spin ${className}`} xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+    <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+    <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"></path>
+  </svg>
+);
+const Chip = ({ cls, children, onClick, title }) => (
+  <span title={title} onClick={onClick} className={`px-2.5 py-1 rounded-full text-[11px] md:text-xs font-bold whitespace-nowrap ${onClick ? "cursor-pointer" : ""} ${cls}`}>{children}</span>
+);
+const Delta = ({ d, dec = DEC }) =>
+  d === null || d === undefined ? <span className="text-gray-300">-</span>
+  : d > 0 ? <span className="text-red-500 font-bold">▲{fmtScaled(d, dec)}</span>
+  : d < 0 ? <span className="text-blue-500 font-bold">▼{fmtScaled(-d, dec)}</span>
+  : <span className="text-gray-500 font-bold">0</span>;
+const DeltaCell = ({ info }) => {
+  if (!info.prevExam) return <span className="text-[11px] text-gray-300">비교 없음</span>;
+  return (
+    <div className="leading-tight">
+      <Delta d={info.delta} />
+      <div className="text-[10px] text-gray-400 whitespace-nowrap">{examById[info.prevExam].short} {info.prev === null ? "-" : fmtS(info.prev)}</div>
+    </div>
+  );
+};
+const BADGE = { A: "bg-blue-100 text-blue-700", B: "bg-green-100 text-green-700", C: "bg-yellow-100 text-yellow-700", D: "bg-orange-100 text-orange-700", E: "bg-red-100 text-red-700" };
+const GRADE_TEXT = { A: "text-blue-600", B: "text-emerald-600", C: "text-yellow-600", D: "text-orange-500", E: "text-red-500" };
+const GradeBadge = ({ g, purple }) => (
+  <span className={`inline-block w-6 h-6 leading-6 text-center rounded-full font-bold text-xs ${!g ? "bg-gray-100 text-gray-400" : purple ? "bg-purple-100 text-purple-700" : BADGE[g]}`}>{g || "-"}</span>
+);
+
+const ChartBox = ({ config, height = 260 }) => {
+  const state = useLib("chart");
+  const canvasRef = useRef(null);
+  const key = JSON.stringify(config);
+  useEffect(() => {
+    if (state !== "ready" || !canvasRef.current) return;
+    const ch = new window.Chart(canvasRef.current, JSON.parse(key));
+    return () => ch.destroy();
+  }, [state, key]);
+  return (
+    <div style={{ position: "relative", height }}>
+      {state === "ready" ? <canvas ref={canvasRef} /> : (
+        <div className="h-full flex items-center justify-center text-xs text-gray-400">{state === "failed" ? "그래프를 불러오지 못했습니다 (네트워크 확인)" : "그래프 불러오는 중..."}</div>
+      )}
+    </div>
+  );
+};
+const baseOpts = (extra = {}) => ({ responsive: true, maintainAspectRatio: false, animation: false, plugins: { legend: { position: "bottom" } }, ...extra });
+
+// 숫자 입력칸: 0.1점 단위, 칸을 벗어날 때(또는 Enter) 한 번만 저장
+const NumInput = ({ s, max = 100, disabled, onCommit, placeholder, capture, tone = "" }) => {
+  const shown = s === null || s === undefined ? "" : fmtS(s);
+  const [text, setText] = useState(shown);
+  const editing = useRef(false);
+  useEffect(() => { if (!editing.current) setText(shown); }, [shown]);
+  if (capture) return <div className={`w-14 px-1 py-1 text-center font-bold text-sm ${tone}`}>{shown === "" ? "-" : shown}</div>;
+  const commit = () => {
+    editing.current = false;
+    const t = text.trim();
+    if (t === "" || t === ".") { setText(""); if (shown !== "") onCommit(null); return; }
+    const n = Number(t);
+    if (!Number.isFinite(n)) { setText(shown); return; }
+    const ns = clamp(Math.round(n * SCALE), 0, max * SCALE);
+    setText(fmtS(ns));
+    if (ns !== s) onCommit(ns / SCALE);
+  };
+  return (
+    <input type="text" inputMode="decimal" autoComplete="off" disabled={disabled} value={text} placeholder={placeholder}
+      onFocus={() => { editing.current = true; }}
+      onChange={(e) => {
+        const v = e.target.value.replace(/[^0-9.]/g, "");
+        const [i, ...rest] = v.split(".");
+        setText(rest.length ? `${i}.${rest.join("").slice(0, DEC)}` : i);
+      }}
+      onBlur={commit}
+      onKeyDown={(e) => { if (e.key === "Enter") e.currentTarget.blur(); }}
+      className={`w-14 px-1 py-1 text-center border rounded font-bold outline-none text-base md:text-sm shadow-sm focus:ring-2 focus:ring-emerald-400 ${disabled ? "bg-gray-100 text-gray-500 cursor-not-allowed" : "bg-white"} ${tone}`} />
+  );
+};
+
+const ResolutionArea = ({ value, onSave, capture }) => {
+  const [text, setText] = useState(value || "");
+  const dirty = useRef(false);
+  const latest = useRef(value || "");
+  const timer = useRef(null);
+  const saveRef = useRef(onSave);
+  saveRef.current = onSave;
+  useEffect(() => { if (!dirty.current) { setText(value || ""); latest.current = value || ""; } }, [value]);
+  const flush = () => { clearTimeout(timer.current); if (dirty.current) { dirty.current = false; saveRef.current(latest.current); } };
+  useEffect(() => () => flush(), []);
+  const ph = "이번 시험에서 목표를 달성하기 위해 어떤 노력을 할 것인지, 스스로에게 응원의 한마디를 적어보세요!";
+  if (capture) return <div className="w-full min-h-[6rem] p-3 rounded-lg border border-gray-300 bg-gray-50 leading-relaxed whitespace-pre-wrap text-gray-800 text-sm">{text || ph}</div>;
+  return (
+    <div>
+      <textarea maxLength={1500} value={text} placeholder={`${ph} (최대 1500자)`}
+        onChange={(e) => { const v = e.target.value; setText(v); latest.current = v; dirty.current = true; clearTimeout(timer.current); timer.current = setTimeout(flush, 800); }}
+        onBlur={flush}
+        className="w-full h-28 p-3 rounded-lg border border-gray-300 focus:ring-2 focus:ring-emerald-500 outline-none resize-none bg-gray-50 hover:bg-white transition leading-relaxed text-base md:text-sm" />
+      <div className="text-right text-xs text-gray-400">{text.length} / 1500</div>
+    </div>
+  );
+};
+
+const TONE = { info: ["ℹ️", "text-emerald-800", "border-emerald-600"], success: ["✅", "text-emerald-800", "border-emerald-600"], error: ["⚠️", "text-red-600", "border-red-500"], danger: ["⚠️", "text-red-600", "border-red-500"] };
+const Modal = ({ cfg, onClose }) => {
+  const [vals, setVals] = useState(() => Object.fromEntries(((cfg && cfg.fields) || []).map((f) => [f.key, f.initial || ""])));
+  const [err, setErr] = useState("");
+  const [loading, setLoading] = useState(false);
+  if (!cfg) return null;
+  const [icon, titleCls, borderCls] = TONE[cfg.tone || "info"];
+  const confirm = async () => {
+    if (loading) return;
+    if (!cfg.onConfirm) return onClose(cfg.id);
+    setErr(""); setLoading(true);
+    try {
+      const r = await cfg.onConfirm(vals);
+      if (typeof r === "string") { setErr(r); setLoading(false); return; }
+      onClose(cfg.id);
+    } catch (e) { console.error(e); setErr(errorMessage(e)); setLoading(false); }
+  };
+  const inputCls = "w-full p-3 border border-gray-300 rounded-lg outline-none focus:ring-2 focus:ring-emerald-500 font-bold text-gray-800 text-base md:text-sm";
+  return (
+    <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-[300] p-4">
+      <div className={`bg-white rounded-2xl shadow-2xl p-6 w-full max-w-md border-t-8 ${borderCls} max-h-[90vh] overflow-y-auto`}>
+        <h3 className={`text-lg font-bold mb-3 flex items-center gap-2 ${titleCls}`}>{icon} {cfg.title}</h3>
+        {cfg.message && <p className="text-gray-700 mb-4 font-semibold leading-relaxed whitespace-pre-wrap text-sm">{cfg.message}</p>}
+        {(cfg.fields || []).map((f, i) => (
+          <label key={f.key} className="block mb-3">
+            <span className="block text-xs font-bold text-gray-600 mb-1">{f.label}</span>
+            {f.type === "textarea"
+              ? <textarea rows={10} value={vals[f.key]} onChange={(e) => setVals((v) => ({ ...v, [f.key]: e.target.value }))} className={inputCls} />
+              : <input type={f.type || "text"} inputMode={f.inputMode} autoFocus={i === 0} value={vals[f.key]}
+                  onChange={(e) => setVals((v) => ({ ...v, [f.key]: e.target.value }))}
+                  onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); confirm(); } }} className={inputCls} />}
+          </label>
+        ))}
+        {err && <p className="text-red-500 font-bold text-xs mb-3 whitespace-pre-wrap">{err}</p>}
+        <div className="flex justify-end gap-2">
+          {cfg.cancel && <button type="button" disabled={loading} onClick={() => onClose(cfg.id)} className="px-4 py-2 text-gray-600 font-bold hover:bg-gray-100 rounded-lg text-sm">취소</button>}
+          <button type="button" disabled={loading} onClick={confirm} className={`px-5 py-2 ${cfg.tone === "danger" ? "bg-red-600 hover:bg-red-700" : "bg-emerald-600 hover:bg-emerald-700"} text-white font-bold rounded-lg shadow-md text-sm disabled:opacity-60`}>
+            {loading ? "처리 중..." : (cfg.confirmText || "확인")}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+};
+
+/* ═════════════════════════ 7. 성적표 행 ═════════════════════════ */
+const ProjectionCell = ({ proj, subj, showPerfSelect, expPerf, rp, capture, onExpPerf }) => {
+  if (!proj) return null;
+  if (proj.msg) return <span className="text-xs text-gray-400">{proj.msg}</span>;
+  const { rows, label, maxS } = proj;
+  return (
+    <div className="flex flex-col items-center gap-1 py-1">
+      {showPerfSelect && (
+        <div className="flex items-center gap-1 text-[11px] md:text-xs text-yellow-800 font-semibold bg-yellow-100/60 px-1.5 py-1 rounded border border-yellow-200">
+          수행 예상:
+          {capture ? <span className="font-bold">{expPerf}점</span> : (
+            <select value={expPerf} onChange={(e) => onExpPerf(Number(e.target.value))} className="rounded bg-white text-yellow-900 font-bold px-0.5 cursor-pointer text-base md:text-xs">
+              {Array.from({ length: rp + 1 }, (_, i) => rp - i).map((n) => <option key={n} value={n}>{n}점</option>)}
+            </select>
+          )}
+          <span className="text-gray-400 font-normal">/ {rp}</span>
+        </div>
+      )}
+      {rows.length === 0 && <div className="font-bold text-[11px] md:text-xs text-red-500">{label} 만점이어도 {lowestGrade(subj)}등급</div>}
+      {rows.map((r) => (
+        <div key={r.grade} className={`font-bold text-[11px] md:text-xs leading-snug whitespace-nowrap ${GRADE_TEXT[r.grade]}`}>
+          {r.lo === 0 && r.hi >= maxS ? `${r.grade}등급 이상 확정`
+            : r.lo === 0 ? `${r.grade}: ${label} 0~${fmtS(r.hi)}점`
+            : r.hi >= maxS ? `${r.grade}: ${label} ${fmtS(r.lo)}점 이상`
+            : `${r.grade}: ${label} ${fmtS(r.lo)}~${fmtS(r.hi)}점`}
+        </div>
+      ))}
+    </div>
+  );
+};
+
+const ExamRow = ({ sub, exam, sd, isTeacher, capture, onScore, onTarget, onExpPerf }) => {
+  const skipped = !takes(exam.id, sub.name);
+  const d = sd?.[exam.id];
+  const score = toS(d?.scores?.[sub.name]);
+  const target = toS(d?.plan?.targets?.[sub.name]);
+  const expStored = d?.plan?.expectedPerf?.[sub.name];
+  const expPerf = isNum(expStored) ? clamp(Math.round(Number(expStored)), 0, sub.rp) : sub.rp;
+  const st = semesterStatus(sub, exam.sem, sd);
+  return (
+    <tr className={`border-b border-gray-100 ${skipped ? "bg-gray-100/50" : "hover:bg-gray-50"}`}>
+      <td className="p-2 font-bold text-gray-800 text-center bg-gray-50 border-r border-gray-100 text-sm whitespace-nowrap">{sub.name}</td>
+      {skipped ? (
+        <td colSpan={6} className="p-2 text-center text-gray-400 text-xs font-bold">이번 시험 미실시 과목</td>
+      ) : (
+        <>
+          <td className="p-1 border-r border-gray-100"><div className="flex justify-center"><NumInput s={target} onCommit={onTarget} placeholder="목표" capture={capture} tone="text-emerald-700" /></div></td>
+          <td className="p-1 border-r border-gray-100"><div className="flex justify-center"><NumInput s={score} onCommit={onScore} disabled={!isTeacher} placeholder={isTeacher ? "점수" : "-"} capture={capture} /></div></td>
+          <td className="p-1 text-center text-sm"><Delta d={score !== null && target !== null ? score - target : null} /></td>
+          <td className="p-1 text-center text-sm border-r border-gray-100"><DeltaCell info={deltaInfo(sd, exam.id, sub.name)} /></td>
+          <td className="p-1 text-center border-r border-gray-100"><GradeBadge g={score !== null ? gradeOfS(score, sub.name) : null} /></td>
+          <td className="p-1 text-center align-middle bg-yellow-50">
+            <ProjectionCell proj={projectionFor(exam.kind, sub, st.e1, st.e2, expPerf)} subj={sub.name}
+              showPerfSelect={exam.kind === "e1" && sub.r1 > 0 && sub.r2 > 0} expPerf={expPerf} rp={sub.rp} capture={capture} onExpPerf={onExpPerf} />
           </td>
-          <td className="p-1 border-r border-gray-100 bg-white">
-             <div className="flex justify-center gap-1">
-              {/* ✅ 학기말 성적도 학생 권한일 때는 수정 못하도록 잠금 */}
-              {!isCapturing ? (
-                <>
-                  <input type="number" step="any" disabled={r1 === 0 || currentUserRole === 'student'} value={subject.score1||""} onChange={e=>updateField('score1', e.target.value)} onBlur={()=>handleBlur('score1', 100, subject.score1)} placeholder={r1 === 0 ? "-" : "1차"} className={`w-10 px-0.5 py-1 text-center border rounded focus:border-purple-500 font-semibold outline-none text-xs ${r1 === 0 || currentUserRole === 'student' ? 'bg-gray-100 cursor-not-allowed' : ''}`}/>
-                  <input type="number" step="any" disabled={r2 === 0 || currentUserRole === 'student'} value={subject.score2||""} onChange={e=>updateField('score2', e.target.value)} onBlur={()=>handleBlur('score2', 100, subject.score2)} placeholder={r2 === 0 ? "-" : "2차"} className={`w-10 px-0.5 py-1 text-center border rounded focus:border-purple-500 font-semibold outline-none text-xs ${r2 === 0 || currentUserRole === 'student' ? 'bg-gray-100 cursor-not-allowed' : ''}`}/>
-                  <input type="number" step="any" disabled={rp === 0 || currentUserRole === 'student'} value={subject.scorePerf||""} onChange={e=>updateField('scorePerf', e.target.value)} onBlur={()=>handleBlur('scorePerf', rp, subject.scorePerf)} placeholder={rp === 0 ? "-" : "수행"} className={`w-10 px-0.5 py-1 text-center border rounded focus:border-purple-500 font-semibold outline-none text-xs ${rp === 0 || currentUserRole === 'student' ? 'bg-gray-100 cursor-not-allowed' : ''}`}/>
-                </>
+        </>
+      )}
+    </tr>
+  );
+};
+
+const SemesterRow = ({ sub, exam, sd, isTeacher, capture, onE1, onE2, onPerf, showDelta }) => {
+  const st = semesterStatus(sub, exam.sem, sd);
+  const cell = (ratio, s, max, ph, onCommit) => ratio === 0
+    ? <div className="w-14 py-1 text-center text-gray-300 text-xs font-semibold">-</div>
+    : <NumInput s={s} max={max} disabled={!isTeacher} placeholder={ph} capture={capture} onCommit={onCommit} />;
+  return (
+    <tr className="border-b border-gray-100 hover:bg-gray-50">
+      <td className="p-2 font-bold text-gray-800 text-center bg-purple-50 border-r border-gray-100 text-sm whitespace-nowrap">{sub.name}</td>
+      <td className="p-1 border-r border-gray-100 text-center text-xs font-semibold">
+        <span className={sub.r1 ? "text-purple-700" : "text-gray-300"}>{sub.r1}</span>:<span className={sub.r2 ? "text-purple-700" : "text-gray-300"}>{sub.r2}</span>:<span className={sub.rp ? "text-purple-700" : "text-gray-300"}>{sub.rp}</span>
+      </td>
+      <td className="p-1 border-r border-gray-100">
+        <div className="flex justify-center gap-1">
+          {cell(sub.r1, st.e1, 100, "1차", onE1)}
+          {cell(sub.r2, st.e2, 100, "2차", onE2)}
+          {cell(sub.rp, st.perf, sub.rp, "수행", onPerf)}
+        </div>
+      </td>
+      <td className="p-1 text-center font-bold text-purple-700 text-sm bg-purple-50">
+        {!st.any ? <span className="text-gray-400">-</span>
+          : st.complete ? <div>{st.points}점{st.U % UNIT !== 0 && <div className="text-[10px] text-purple-400 font-semibold">({fmtScaled(st.U, DEC + 2)})</div>}</div>
+          : <div className="text-gray-400 text-xs leading-tight">입력 중<br/>(현재 {fmtScaled(st.U, DEC + 2)})</div>}
+      </td>
+      <td className="p-1 text-center bg-purple-50"><GradeBadge g={st.grade} purple /></td>
+      {showDelta && <td className="p-1 text-center text-sm bg-purple-50"><DeltaCell info={deltaInfo(sd, exam.id, sub.name)} /></td>}
+    </tr>
+  );
+};
+
+/* ═════════════════════════ 8. 개인 분석 (학생·선생님 공용) ═════════════════════════ */
+const MyAnalysis = ({ sd, exam }) => {
+  const subs = examSubjects(exam);
+  const sum = studentSummary(sd, exam.id);
+  const withDelta = subs.filter((s) => sum.deltas[s.name] !== null);
+  const best = withDelta.length ? withDelta.reduce((a, b) => (sum.deltas[b.name] > sum.deltas[a.name] ? b : a)) : null;
+  const worst = withDelta.length ? withDelta.reduce((a, b) => (sum.deltas[b.name] < sum.deltas[a.name] ? b : a)) : null;
+  const seq = exam.kind === "final" ? SEQ.f : SEQ.e;
+  const lineSubs = SUBJECTS[2].map((s) => s.name).filter((name) => seq.some((id) => valueS(sd, id, name) !== null));
+  if (!sum.n && !lineSubs.length) return <p className="text-sm text-gray-400">아직 입력된 점수가 없습니다.</p>;
+
+  const compare = {
+    type: "bar",
+    data: { labels: subs.map((s) => s.name), datasets: [
+      { label: "직전", data: subs.map((s) => (sum.prevs[s.name] === null ? null : sum.prevs[s.name] / SCALE)), backgroundColor: "#cbd5e1" },
+      { label: exam.short, data: subs.map((s) => (sum.vals[s.name] === null ? null : sum.vals[s.name] / SCALE)), backgroundColor: "#059669" },
+    ] },
+    options: baseOpts({ scales: { y: { min: 0, max: 100 } } }),
+  };
+  const trend = {
+    type: "line",
+    data: { labels: seq.map((id) => examById[id].short), datasets: lineSubs.map((name) => ({
+      label: name, data: seq.map((id) => { const v = valueS(sd, id, name); return v === null ? null : v / SCALE; }),
+      borderColor: SUBJECT_COLORS[name], backgroundColor: SUBJECT_COLORS[name], spanGaps: true, tension: 0.2, pointRadius: 4,
+    })) },
+    options: baseOpts({ scales: { y: { min: 0, max: 100 } } }),
+  };
+  const card = (title, body) => (
+    <div className="bg-white rounded-xl border border-gray-200 p-3 text-center">
+      <div className="text-[11px] text-gray-500 font-bold mb-1">{title}</div>
+      <div className="text-base md:text-lg font-black">{body}</div>
+    </div>
+  );
+  return (
+    <div className="space-y-4">
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-2">
+        {card(`${exam.short} 평균`, sum.n ? <span>{fmtX(sum.avgX)}<span className="text-xs text-gray-400 font-bold"> ({sum.n}/{sum.total}과목)</span></span> : "-")}
+        {card("직전 대비 (과목별 변화 평균)", sum.dn ? <Delta d={sum.avgDeltaX} dec={DEC + 1} /> : "-")}
+        {card("가장 많이 오른 과목", best && sum.deltas[best.name] > 0 ? <span>{best.name} <Delta d={sum.deltas[best.name]} /></span> : "-")}
+        {card("가장 많이 내린 과목", worst && sum.deltas[worst.name] < 0 ? <span>{worst.name} <Delta d={sum.deltas[worst.name]} /></span> : "-")}
+      </div>
+      <div className="grid md:grid-cols-2 gap-4">
+        <div className="bg-white rounded-xl border border-gray-200 p-3"><p className="text-sm font-bold text-gray-700 mb-2">과목별 직전 vs 이번</p><ChartBox config={compare} /></div>
+        <div className="bg-white rounded-xl border border-gray-200 p-3"><p className="text-sm font-bold text-gray-700 mb-2">시험별 추이</p><ChartBox config={trend} /></div>
+      </div>
+    </div>
+  );
+};
+
+/* ═════════════════════════ 9. 반 통계 (선생님 전용) ═════════════════════════ */
+const StatsView = ({ dataByNo, roster, capture, onPickStudent, onCapture, notify }) => {
+  const [examId, setExamId] = useState(() => {
+    for (let i = EXAMS.length - 1; i >= 0; i--) if (ALL_NOS.some((no) => studentSummary(dataByNo[no], EXAMS[i].id).n > 0)) return EXAMS[i].id;
+    return EXAMS[0].id;
+  });
+  const [basis, setBasis] = useState("__all__");
+  const [order, setOrder] = useState("score");
+  const exam = examById[examId];
+  const subs = examSubjects(exam);
+  const b = basis === "__all__" || subs.some((s) => s.name === basis) ? basis : "__all__";
+  const basisName = b === "__all__" ? "전체 평균" : b;
+  const label = (no) => `${no}번${roster[no] ? " " + roster[no] : ""}`;
+
+  const rows = ALL_NOS.map((no) => {
+    const s = studentSummary(dataByNo[no], examId);
+    const score = b === "__all__" ? (s.n ? { num: s.sum, den: s.n } : null) : (s.vals[b] !== null ? { num: s.vals[b], den: 1 } : null);
+    const delta = b === "__all__" ? (s.dn ? { num: s.dsum, den: s.dn } : null) : (s.deltas[b] !== null ? { num: s.deltas[b], den: 1 } : null);
+    return { no, ...s, score, delta };
+  });
+  const keyOf = (r) => (order === "score" ? r.score : order === "no" ? null : r.delta);
+  const sorted = [...rows].sort((x, y) => {
+    if (order === "no") return x.no - y.no;
+    const a = keyOf(x), c = keyOf(y);
+    if (!a && !c) return x.no - y.no;
+    if (!a) return 1;
+    if (!c) return -1;
+    const d = order === "down" ? cmpFrac(a, c) : cmpFrac(c, a);
+    return d !== 0 ? d : x.no - y.no;
+  });
+  let rank = 0;
+  sorted.forEach((r, i) => {
+    const k = keyOf(r);
+    if (order === "no" || !k) { r.rank = null; return; }
+    if (i === 0 || cmpFrac(k, keyOf(sorted[i - 1])) !== 0) rank = i + 1;
+    r.rank = rank;
+  });
+
+  const sstats = subs.map((s) => ({ sub: s, ...subjectStats(dataByNo, examId, s) }));
+  let tSum = 0, tN = 0, dSum = 0, dN = 0, entered = 0;
+  rows.forEach((r) => { tSum += r.sum; tN += r.n; dSum += r.dsum; dN += r.dn; if (r.n) entered++; });
+  const top = rows.filter((r) => r.n).sort((x, y) => cmpFrac({ num: y.sum, den: y.n }, { num: x.sum, den: x.n }))[0];
+  const fracX = (f) => (f ? roundDiv(f.num * 10, f.den) : null);
+
+  const byScore = rows.filter((r) => r.score).sort((x, y) => cmpFrac(y.score, x.score) || x.no - y.no);
+  const byDelta = rows.filter((r) => r.delta).sort((x, y) => cmpFrac(y.delta, x.delta) || x.no - y.no);
+  const barH = (n) => Math.max(160, n * 22 + 50);
+  const charts = {
+    avg: { type: "bar", data: { labels: subs.map((s) => s.name), datasets: [
+      { label: "직전 시험", data: sstats.map((s) => xToPt(s.prevMeanX)), backgroundColor: "#cbd5e1" },
+      { label: exam.short, data: sstats.map((s) => xToPt(s.meanX)), backgroundColor: "#059669" } ] },
+      options: baseOpts({ scales: { y: { min: 0, max: 100 } } }) },
+    dist: { type: "bar", data: { labels: subs.map((s) => s.name), datasets: ["A", "B", "C", "D", "E"].map((g) => ({
+      label: g, data: sstats.map((s) => s.dist[g] ?? 0), backgroundColor: GRADE_COLORS[g] })) },
+      options: baseOpts({ scales: { x: { stacked: true }, y: { stacked: true, ticks: { precision: 0 } } } }) },
+    score: { type: "bar", data: { labels: byScore.map((r) => label(r.no)), datasets: [{ label: `${basisName} 점수`,
+      data: byScore.map((r) => xToPt(fracX(r.score))), backgroundColor: "#10b981" }] },
+      options: baseOpts({ indexAxis: "y", scales: { x: { min: 0, max: 100 } }, plugins: { legend: { display: false } } }) },
+    delta: { type: "bar", data: { labels: byDelta.map((r) => label(r.no)), datasets: [{ label: `${basisName} 변화`,
+      data: byDelta.map((r) => xToPt(fracX(r.delta))), backgroundColor: byDelta.map((r) => (r.delta.num > 0 ? "#ef4444" : r.delta.num < 0 ? "#3b82f6" : "#9ca3af")) }] },
+      options: baseOpts({ indexAxis: "y", plugins: { legend: { display: false } } }) },
+  };
+
+  const exportExcel = async () => {
+    try { await loadLib("xlsx"); } catch (e) { return notify("오류 안내", "엑셀 기능을 불러오지 못했습니다. 네트워크를 확인해 주세요.", "error"); }
+    const head = ["순위", "번호", "이름", ...subs.flatMap((s) => [s.name, `${s.name} 변화`]), "평균", "과목별 변화 평균"];
+    const body = sorted.map((r) => [r.rank ?? "", r.no, roster[r.no] || "",
+      ...subs.flatMap((s) => [r.vals[s.name] === null ? "" : r.vals[s.name] / SCALE, r.deltas[s.name] === null ? "" : r.deltas[s.name] / SCALE]),
+      r.n ? xToPt(r.avgX) : "", r.dn ? xToPt(r.avgDeltaX) : ""]);
+    const head2 = ["과목", "입력 인원", "평균", "중앙값", "최고", "최저", "표준편차", "직전 평균", "평균 변화", "성취도 분포"];
+    const body2 = sstats.map((s) => [s.sub.name, s.n, xToPt(s.meanX) ?? "", xToPt(s.medianX) ?? "", s.max === null ? "" : s.max / SCALE, s.min === null ? "" : s.min / SCALE,
+      s.sd === null ? "" : Number(s.sd.toFixed(2)), xToPt(s.prevMeanX) ?? "", xToPt(s.changeX) ?? "", Object.entries(s.dist).map(([g, c]) => `${g}:${c}`).join(" ")]);
+    const wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet([head, ...body]), "학생별");
+    XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet([head2, ...body2]), "과목별");
+    XLSX.writeFile(wb, `${exam.label}_통계_${basisName}_${{ no: "번호순", score: "점수순", up: "상승순", down: "하락순" }[order]}.xlsx`);
+  };
+
+  const selCls = "w-full p-2.5 rounded-lg border border-gray-300 font-bold text-emerald-800 outline-none focus:ring-2 focus:ring-emerald-500 text-base md:text-sm bg-white";
+  const box = (title, child, note) => (
+    <div className="bg-white rounded-xl border border-gray-200 p-3 md:p-4">
+      <p className="text-sm md:text-base font-bold text-gray-800 mb-2">{title}</p>{child}
+      {note && <p className="text-[11px] text-gray-400 mt-2">{note}</p>}
+    </div>
+  );
+  const card = (t, v) => <div className="bg-white rounded-xl border border-gray-200 p-3 text-center"><div className="text-[11px] text-gray-500 font-bold mb-1">{t}</div><div className="text-base md:text-xl font-black">{v}</div></div>;
+
+  return (
+    <div id="stats-area" className="space-y-4 bg-emerald-50" style={capture ? { width: 1000, padding: 16 } : undefined}>
+      <div className="bg-white rounded-xl shadow-sm p-4 grid md:grid-cols-3 gap-3">
+        <label className="block"><span className="block text-xs font-bold text-gray-600 mb-1">시험</span>
+          <select value={examId} onChange={(e) => setExamId(e.target.value)} className={selCls}>{EXAMS.map((e) => <option key={e.id} value={e.id}>{e.label}</option>)}</select></label>
+        <label className="block"><span className="block text-xs font-bold text-gray-600 mb-1">기준</span>
+          <select value={b} onChange={(e) => setBasis(e.target.value)} className={selCls}>
+            <option value="__all__">전체 (과목 평균)</option>{subs.map((s) => <option key={s.name} value={s.name}>{s.name}</option>)}
+          </select></label>
+        <label className="block"><span className="block text-xs font-bold text-gray-600 mb-1">정렬</span>
+          <select value={order} onChange={(e) => setOrder(e.target.value)} className={selCls}>
+            <option value="score">점수 높은순</option><option value="up">상승폭 큰순</option><option value="down">하락폭 큰순</option><option value="no">번호순</option>
+          </select></label>
+        {!capture && (
+          <div className="md:col-span-3 flex flex-wrap gap-2">
+            <button type="button" onClick={exportExcel} className="px-4 py-2 rounded-lg bg-blue-600 text-white font-bold text-sm flex items-center gap-1.5"><Download className="w-4 h-4" /> 엑셀로 내보내기</button>
+            <button type="button" onClick={() => onCapture(exam.label)} className="px-4 py-2 rounded-lg bg-gray-800 text-white font-bold text-sm flex items-center gap-1.5"><ImageIcon className="w-4 h-4" /> 이미지로 저장</button>
+          </div>
+        )}
+      </div>
+
+      <h2 className="text-lg md:text-xl font-bold text-emerald-800 flex items-center gap-2"><BarChart className="w-5 h-5" /> {exam.label} · 기준: {basisName}</h2>
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-2">
+        {card("점수 입력 인원", `${entered} / ${STUDENT_COUNT}명`)}
+        {card("반 전체 평균", tN ? fmtX(roundDiv(tSum * 10, tN)) : "-")}
+        {card("직전 대비 평균 변화", dN ? <Delta d={roundDiv(dSum * 10, dN)} dec={DEC + 1} /> : "-")}
+        {card("최고 평균", top ? <span>{fmtX(top.avgX)} <span className="text-xs text-gray-500">{label(top.no)}</span></span> : "-")}
+      </div>
+
+      <div className="grid md:grid-cols-2 gap-4">
+        {box("과목별 반 평균 (직전 vs 이번)", <ChartBox config={charts.avg} />)}
+        {box("성취도 분포", <ChartBox config={charts.dist} />, exam.kind === "final" ? "학기말 환산총점 기준" : "이번 시험 점수만으로 본 참고용 분포")}
+        {box(`${basisName} 점수 순위`, byScore.length ? <ChartBox config={charts.score} height={barH(byScore.length)} /> : <p className="text-sm text-gray-400">데이터 없음</p>)}
+        {box(`${basisName} 직전 대비 변화 (상승 빨강 · 하락 파랑)`, byDelta.length ? <ChartBox config={charts.delta} height={barH(byDelta.length)} /> : <p className="text-sm text-gray-400">비교할 직전 시험 데이터가 없습니다</p>)}
+      </div>
+
+      {box("과목별 통계", (
+        <div className="overflow-x-auto">
+          <table className="w-full min-w-[720px] text-sm text-center border-collapse">
+            <thead><tr className="bg-gray-50 text-gray-700 text-xs">
+              {["과목", "입력", "평균", "중앙값", "최고", "최저", "표준편차", "직전 평균", "평균 변화", "성취도 분포"].map((h) => <th key={h} className="p-2 font-bold">{h}</th>)}
+            </tr></thead>
+            <tbody>{sstats.map((s) => (
+              <tr key={s.sub.name} className={`border-t border-gray-100 ${b === s.sub.name ? "bg-yellow-50" : ""}`}>
+                <td className="p-2 font-bold">{s.sub.name}</td><td className="p-2">{s.n}</td>
+                <td className="p-2 font-bold">{s.meanX === null ? "-" : fmtX(s.meanX)}</td>
+                <td className="p-2">{s.medianX === null ? "-" : fmtX(s.medianX)}</td>
+                <td className="p-2">{s.max === null ? "-" : fmtS(s.max)}</td><td className="p-2">{s.min === null ? "-" : fmtS(s.min)}</td>
+                <td className="p-2">{s.sd === null ? "-" : s.sd.toFixed(2)}</td>
+                <td className="p-2">{s.prevMeanX === null ? "-" : fmtX(s.prevMeanX)}</td>
+                <td className="p-2"><Delta d={s.changeX} dec={DEC + 1} /></td>
+                <td className="p-2 text-xs whitespace-nowrap">{Object.entries(s.dist).map(([g, c]) => <span key={g} className={`mr-1.5 font-bold ${GRADE_TEXT[g]}`}>{g}{c}</span>)}</td>
+              </tr>
+            ))}</tbody>
+          </table>
+        </div>
+      ), "평균 변화 = 이번 반 평균 − 직전 시험 반 평균")}
+
+      {box(`학생별 성적 · ${basisName} ${{ no: "번호순", score: "점수 높은순", up: "상승폭 큰순", down: "하락폭 큰순" }[order]}`, (
+        <div className="overflow-x-auto">
+          <table className="w-full text-sm text-center border-collapse" style={{ minWidth: 260 + subs.length * 70 }}>
+            <thead><tr className="bg-gray-50 text-gray-700 text-xs">
+              <th className="p-2 font-bold">순위</th><th className="p-2 font-bold text-left">학생</th>
+              {subs.map((s) => <th key={s.name} className={`p-2 font-bold ${b === s.name ? "bg-yellow-100" : ""}`}>{s.name}</th>)}
+              <th className={`p-2 font-bold ${b === "__all__" ? "bg-yellow-100" : ""}`}>평균</th><th className={`p-2 font-bold ${b === "__all__" ? "bg-yellow-100" : ""}`}>변화 평균</th>
+            </tr></thead>
+            <tbody>{sorted.map((r) => (
+              <tr key={r.no} onClick={() => !capture && onPickStudent(r.no, examId)} className={`border-t border-gray-100 ${capture ? "" : "cursor-pointer hover:bg-emerald-50"} ${r.n ? "" : "text-gray-300"}`}>
+                <td className="p-2 font-black text-emerald-700">{r.rank ?? "-"}</td>
+                <td className="p-2 font-bold text-left whitespace-nowrap">{label(r.no)}</td>
+                {subs.map((s) => (
+                  <td key={s.name} className={`p-1.5 leading-tight ${b === s.name ? "bg-yellow-50" : ""}`}>
+                    <div className="font-bold">{r.vals[s.name] === null ? "-" : fmtS(r.vals[s.name])}</div>
+                    <div className="text-[10px]"><Delta d={r.deltas[s.name]} /></div>
+                  </td>
+                ))}
+                <td className={`p-2 font-bold ${b === "__all__" ? "bg-yellow-50" : ""}`}>{r.n ? fmtX(r.avgX) : "-"}{r.n && r.n < r.total ? <span className="text-[10px] text-gray-400"> ({r.n}과목)</span> : null}</td>
+                <td className={`p-2 ${b === "__all__" ? "bg-yellow-50" : ""}`}><Delta d={r.dn ? r.avgDeltaX : null} dec={DEC + 1} /></td>
+              </tr>
+            ))}</tbody>
+          </table>
+        </div>
+      ), "직전 대비는 그 과목이 실제로 치러진 바로 앞 시험과 비교합니다. 변화 평균 = 비교 가능한 과목들의 변화량 평균. 줄을 누르면 그 학생 화면으로 이동합니다.")}
+    </div>
+  );
+};
+
+/* ═════════════════════════ 10. 로그인 ═════════════════════════ */
+const LoginScreen = () => {
+  const [mode, setMode] = useState(null);
+  const [no, setNo] = useState(null);
+  const [pwd, setPwd] = useState("");
+  const [err, setErr] = useState("");
+  const [loading, setLoading] = useState(false);
+  const back = () => { setMode(null); setNo(null); setPwd(""); setErr(""); };
+  const submit = async () => {
+    if (loading) return;
+    setErr("");
+    if (mode === "student" && !no) return setErr("본인 번호를 먼저 선택하세요.");
+    if (!pwd) return setErr("비밀번호를 입력하세요.");
+    setLoading(true);
+    try { await signInWithEmailAndPassword(auth, mode === "teacher" ? TEACHER_EMAIL : emailOf(no), pwd); }
+    catch (e) { setErr(errorMessage(e)); setPwd(""); setLoading(false); }
+  };
+  const pwdInput = (
+    <input type="password" value={pwd} autoFocus autoComplete="current-password" inputMode={mode === "student" ? "numeric" : undefined}
+      onChange={(e) => { setPwd(e.target.value); if (err) setErr(""); }}
+      onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); submit(); } }}
+      placeholder="비밀번호 입력" className="w-full p-3 border rounded-lg outline-none text-center tracking-widest text-lg focus:ring-2 focus:ring-emerald-500" />
+  );
+  return (
+    <div className="min-h-screen bg-emerald-50 flex flex-col items-center justify-center p-4">
+      <div className="bg-white rounded-3xl shadow-xl overflow-hidden w-full max-w-sm relative">
+        {loading && <div className="absolute inset-0 bg-white/80 flex flex-col items-center justify-center z-50 text-emerald-600"><Spinner className="w-8 h-8 mb-3" /><span className="text-lg font-bold text-emerald-800">로그인 중...</span></div>}
+        <div className="bg-emerald-600 p-6 text-center text-white">
+          <Award className="w-10 h-10 mx-auto mb-3" />
+          <h1 className="text-xl font-bold mb-1">상정중 3-1 성적 향상 프로젝트 <span className="text-xs text-yellow-300 ml-1 font-black">{VERSION}</span></h1>
+          <p className="text-emerald-100 text-sm">아름샘이 항상 응원해! 💪✨</p>
+        </div>
+        <div className="p-6">
+          {!mode && (
+            <div className="space-y-3">
+              <button type="button" onClick={() => setMode("student")} className="w-full py-3.5 bg-emerald-50 hover:bg-emerald-100 text-emerald-800 rounded-xl font-bold flex items-center justify-center gap-2"><User className="w-5 h-5" /> 학생 접속</button>
+              <button type="button" onClick={() => setMode("teacher")} className="w-full py-3.5 bg-blue-50 hover:bg-blue-100 text-blue-800 rounded-xl font-bold flex items-center justify-center gap-2"><Users className="w-5 h-5" /> 관리자 접속</button>
+            </div>
+          )}
+          {mode === "student" && (
+            <div className="space-y-4">
+              <h2 className="text-lg font-bold text-center text-gray-800 flex items-center justify-center gap-2"><User className="w-4 h-4" /> 내 번호 선택</h2>
+              <div className="grid grid-cols-6 gap-1.5">
+                {ALL_NOS.map((n) => (
+                  <button key={n} type="button" onClick={() => { setNo(n); setPwd(""); setErr(""); }}
+                    className={`py-2 rounded-lg font-bold text-sm border ${no === n ? "bg-emerald-600 text-white border-emerald-600" : "bg-white text-gray-700 border-gray-200 hover:bg-emerald-50"}`}>{n}</button>
+                ))}
+              </div>
+              {no && <><p className="text-center text-sm font-bold text-emerald-700">{no}번으로 로그인</p>{pwdInput}</>}
+              {err && <p className="text-red-500 font-bold text-xs text-center whitespace-pre-wrap">{err}</p>}
+              <button type="button" onClick={submit} className="w-full py-3 text-white rounded-lg font-bold bg-emerald-600 hover:bg-emerald-700 text-sm shadow-md">로그인</button>
+              <p className="text-[11px] text-gray-500 text-center leading-relaxed">처음에는 선생님께 받은 비밀번호로 로그인한 뒤<br/>오른쪽 위 '비밀번호 변경'에서 바꿔 주세요.</p>
+              <button type="button" onClick={back} className="w-full py-2 text-gray-500 font-semibold text-xs">돌아가기</button>
+            </div>
+          )}
+          {mode === "teacher" && (
+            <div className="space-y-4">
+              <h2 className="text-lg font-bold text-center text-gray-800 flex items-center justify-center gap-2"><Lock className="w-4 h-4" /> 관리자 로그인</h2>
+              {pwdInput}
+              {err && <p className="text-red-500 font-bold text-xs text-center whitespace-pre-wrap">{err}</p>}
+              <button type="button" onClick={submit} className="w-full py-3 text-white rounded-lg font-bold bg-emerald-600 hover:bg-emerald-700 text-sm">로그인</button>
+              <button type="button" onClick={back} className="w-full py-2 text-gray-500 font-semibold text-xs">돌아가기</button>
+            </div>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+};
+
+/* ═════════════════════════ 11. 메인 앱 ═════════════════════════ */
+const SAVE_CHIP = {
+  idle: ["bg-gray-100 text-gray-500", "입력하면 자동 저장"],
+  saving: ["bg-yellow-100 text-yellow-800", "저장 중..."],
+  saved: ["bg-emerald-100 text-emerald-700", "저장됨 ✓"],
+  error: ["bg-red-100 text-red-700", "저장 실패 · 다시 입력해 주세요"],
+};
+
+const App = () => {
+  const [authReady, setAuthReady] = useState(false);
+  const [role, setRole] = useState(null);
+  const [myNo, setMyNo] = useState(null);
+  const [roster, setRoster] = useState({});
+  const [selectedNo, setSelectedNo] = useState(1);
+  const [examId, setExamId] = useState(EXAMS[0].id);
+  const [tab, setTab] = useState("student");
+  const [dataByNo, setDataByNo] = useState({});
+  const [loaded, setLoaded] = useState(false);
+  const [live, setLive] = useState(false);
+  const [netOnline, setNetOnline] = useState(navigator.onLine);
+  const [listenError, setListenError] = useState(null);
+  const [modal, setModal] = useState(null);
+  const [busy, setBusy] = useState("");
+  const [capture, setCapture] = useState(false);
+  const [saveStatus, setSaveStatus] = useState("idle");
+  const [selfTest, setSelfTest] = useState(null);
+  const pending = useRef(0);
+  const autoPicked = useRef(false);
+  const fileRef = useRef(null);
+  const logoutRef = useRef(null);
+
+  const openModal = (cfg) => setModal({ id: `${Date.now()}_${Math.random()}`, ...cfg });
+  const notify = (title, message, tone = "info") => openModal({ title, message, tone });
+  const notifyError = (e) => notify("오류 안내", typeof e === "string" ? e : errorMessage(e), "error");
+
+  useEffect(() => { window.__APP_STARTED = true; }, []);
+
+  // 로그인 상태 → 역할 (이메일로만 판단, 서버 규칙과 동일)
+  useEffect(() => onAuthStateChanged(auth, (u) => {
+    autoPicked.current = false;
+    setListenError(null); setRoster({}); setDataByNo({}); setLoaded(false); setSaveStatus("idle"); setTab("student");
+    const email = ((u && u.email) || "").toLowerCase();
+    const m = email.match(/^s(\d{2})@(.+)$/);
+    if (!u) { setRole(null); setMyNo(null); }
+    else if (email === TEACHER_EMAIL) { setRole("teacher"); setMyNo(null); }
+    else if (m && m[2] === EMAIL_DOMAIN && Number(m[1]) >= 1 && Number(m[1]) <= STUDENT_COUNT) { setRole("student"); setMyNo(Number(m[1])); }
+    else { setRole(null); setMyNo(null); signOut(auth).catch(() => {}); }
+    setAuthReady(true);
+  }), []);
+
+  // 명단
+  useEffect(() => {
+    if (!role) return;
+    const onErr = (e) => { console.error(e); setListenError(e); };
+    if (role === "teacher") {
+      return onSnapshot(collection(db, ROOT), (snap) => {
+        const r = {};
+        snap.forEach((d) => { const n = Number(d.id.replace(/\D/g, "")); if (n) r[n] = String(d.data().name || "").trim(); });
+        setRoster(r);
+      }, onErr);
+    }
+    return onSnapshot(doc(db, ROOT, sidOf(myNo)), (d) => setRoster(d.exists() ? { [myNo]: String(d.data().name || "").trim() } : {}), onErr);
+  }, [role, myNo]);
+
+  // 성적 데이터 실시간 구독 (선생님: 반 전체 / 학생: 본인만)
+  useEffect(() => {
+    if (!role) return;
+    let everLive = false;
+    const q = role === "teacher" ? collectionGroup(db, "exams") : collection(db, ROOT, sidOf(myNo), "exams");
+    return onSnapshot(q, { includeMetadataChanges: true }, (snap) => {
+      const m = {};
+      snap.forEach((d) => {
+        const studentDoc = d.ref.parent.parent;
+        if (!studentDoc || !studentDoc.parent || studentDoc.parent.id !== ROOT) return;
+        const no = /^s\d{2}$/.test(studentDoc.id) ? Number(studentDoc.id.slice(1)) : 0;
+        if (no >= 1 && no <= STUDENT_COUNT) (m[no] = m[no] || {})[d.id] = d.data();
+      });
+      if (!snap.metadata.fromCache) everLive = true;
+      setLive(!snap.metadata.fromCache);
+      if (everLive) { setDataByNo(m); setLoaded(true); }   // 서버와 한 번이라도 연결된 뒤에만 표시
+    }, (e) => { console.error(e); setListenError(e); });
+  }, [role, myNo]);
+
+  useEffect(() => {
+    const on = () => setNetOnline(navigator.onLine);
+    window.addEventListener("online", on); window.addEventListener("offline", on);
+    return () => { window.removeEventListener("online", on); window.removeEventListener("offline", on); };
+  }, []);
+
+  // 선생님 로그인 시 계산 자동 검증
+  useEffect(() => {
+    if (role !== "teacher" || selfTest) return;
+    const t = setTimeout(() => { const r = runSelfTests(); console.info("계산 검증", r); setSelfTest(r); }, 400);
+    return () => clearTimeout(t);
+  }, [role]);
+
+  // 학생: 가장 최근 기록이 있는 시험 자동 선택
+  useEffect(() => {
+    if (role !== "student" || !loaded || autoPicked.current) return;
+    autoPicked.current = true;
+    const sd = dataByNo[myNo] || {};
+    const withData = EXAMS.filter((e) => hasData(sd[e.id]) || studentSummary(sd, e.id).n > 0);
+    if (withData.length) setExamId(withData[withData.length - 1].id);
+  }, [role, loaded, dataByNo]);
+
+  // 일정 시간 사용하지 않으면 자동 로그아웃
+  useEffect(() => {
+    if (!role) return;
+    let last = Date.now();
+    const bump = () => { last = Date.now(); };
+    const evs = ["pointerdown", "keydown", "scroll", "touchstart"];
+    evs.forEach((e) => window.addEventListener(e, bump, { passive: true }));
+    const t = setInterval(() => { if (Date.now() - last > IDLE_MINUTES * 60000) logoutRef.current(true); }, 30000);
+    return () => { evs.forEach((e) => window.removeEventListener(e, bump)); clearInterval(t); };
+  }, [role]);
+
+  /* ── 저장 ── */
+  const track = (promise) => {
+    pending.current += 1; setSaveStatus("saving");
+    promise.then(() => { pending.current -= 1; if (pending.current === 0) setSaveStatus("saved"); })
+      .catch((e) => { pending.current -= 1; console.error(e); setSaveStatus("error"); if (auth.currentUser) notifyError(e); });
+  };
+  const isTeacher = role === "teacher";
+  const activeNo = isTeacher ? selectedNo : myNo;
+  const sd = dataByNo[activeNo] || {};
+  const exam = examById[examId];
+  const isFinal = exam.kind === "final";
+  const subjects = SUBJECTS[exam.sem];
+  const studentLabel = (n) => `${n}번${roster[n] ? " " + roster[n] : ""}`;
+  const del = (v) => (v === null ? deleteField() : v);
+  const patchDoc = (id, patch) => track(setDoc(examRef(activeNo, id), patch, { merge: true }));
+  const setScore = (id, name) => (v) => patchDoc(id, { scores: { [name]: del(v) } });
+  const setPerf = (name) => (v) => patchDoc(examIdOf(exam.sem, "final"), { perf: { [name]: del(v) } });
+  const setTarget = (name) => (v) => patchDoc(examId, { plan: { targets: { [name]: del(v) } } });
+  const setExpPerf = (name) => (v) => patchDoc(examId, { plan: { expectedPerf: { [name]: v } } });
+  const saveResolution = (no, id) => (text) => track(setDoc(examRef(no, id), { plan: { resolution: text } }, { merge: true }));
+
+  /* ── 계정 ── */
+  const logout = async (idle) => {
+    setBusy("로그아웃 중...");
+    if (document.activeElement && document.activeElement.blur) document.activeElement.blur();
+    await new Promise((r) => setTimeout(r, 50));
+    try { await withTimeout(waitForPendingWrites(db), 5000); } catch (e) { /* 오프라인이면 그대로 진행 */ }
+    setModal(null);
+    await signOut(auth).catch(console.error);
+    setBusy("");
+    if (idle === true) notify("자동 로그아웃", `${IDLE_MINUTES}분 동안 사용하지 않아 안전을 위해 로그아웃했습니다.`);
+  };
+  logoutRef.current = logout;
+
+  const changePassword = () => {
+    const min = isTeacher ? TEACHER_MIN_PWD : STUDENT_MIN_PWD;
+    openModal({
+      title: "비밀번호 변경", cancel: true, confirmText: "변경",
+      message: isTeacher ? `${min}자 이상, 다른 곳에서 쓰지 않는 비밀번호로 정해 주세요.` : `숫자 ${min}자리 이상으로 정해 주세요. 생일·전화번호는 피하세요.`,
+      fields: [
+        { key: "p1", label: "새 비밀번호", type: "password", inputMode: isTeacher ? undefined : "numeric" },
+        { key: "p2", label: "새 비밀번호 확인", type: "password", inputMode: isTeacher ? undefined : "numeric" },
+      ],
+      onConfirm: async ({ p1, p2 }) => {
+        if (!p1 || p1 !== p2) return "두 비밀번호가 같지 않습니다.";
+        if (p1.length < min) return `${min}자 이상으로 정해 주세요.`;
+        if (!isTeacher && !/^\d+$/.test(p1)) return "숫자로만 정해 주세요.";
+        if (/^(\d)\1+$/.test(p1) || "0123456789012".includes(p1) || "9876543210987".includes(p1)) return "같은 숫자 반복이나 연속 숫자는 쓸 수 없습니다.";
+        await updatePassword(auth.currentUser, p1);
+        notify("완료", "비밀번호가 변경되었습니다.", "success");
+      },
+    });
+  };
+
+  /* ── 엑셀 업로드 ── */
+  const templateColumns = (ex) => {
+    const subs = SUBJECTS[ex.sem];
+    if (ex.kind === "final") return subs.flatMap((s) => [s.r1 ? `${s.name}_1차` : null, s.r2 ? `${s.name}_2차` : null, s.rp ? `${s.name}_수행` : null].filter(Boolean));
+    return examSubjects(ex).map((s) => s.name);
+  };
+  const downloadTemplate = async () => {
+    try { await loadLib("xlsx"); } catch (e) { return notifyError("엑셀 기능을 불러오지 못했습니다. 네트워크를 확인해 주세요."); }
+    const ws = XLSX.utils.aoa_to_sheet([["번호", "이름", ...templateColumns(exam)], ...ALL_NOS.map((n) => [n, roster[n] || ""])]);
+    const wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, ws, "성적");
+    XLSX.writeFile(wb, `${exam.label}_업로드양식.xlsx`);
+  };
+  const matchStudent = (cell) => {
+    const s = String(cell ?? "").trim();
+    if (!s) return null;
+    const m = s.match(/^(\d{1,2})(?!\d)/);
+    if (m) { const n = Number(m[1]); return n >= 1 && n <= STUDENT_COUNT ? n : null; }
+    const hit = Object.entries(roster).find(([, name]) => name && (name === s || s.endsWith(name)));
+    return hit ? Number(hit[0]) : null;
+  };
+  const parseUpload = async (file, ex) => {
+    const wb = XLSX.read(await file.arrayBuffer(), { type: "array" });
+    const rows = XLSX.utils.sheet_to_json(wb.Sheets[wb.SheetNames[0]], { header: 1, defval: "" });
+    if (rows.length < 2) throw new Error("NO_DATA");
+    const headers = rows[0].map((h) => String(h ?? "").trim());
+    const subByName = Object.fromEntries(SUBJECTS[ex.sem].map((s) => [s.name, s]));
+    const TYPE = { "1차": "e1", "2차": "e2", "수행": "perf" };
+    const cols = [], ignored = [];
+    headers.forEach((h, j) => {
+      if (j === 0 || !h || h === "이름" || h === "번호") return;
+      let sub, field;
+      if (ex.kind === "final") {
+        const [name, t] = h.split("_").map((x) => x.trim());
+        sub = subByName[name];
+        if (sub) {
+          field = TYPE[t];
+          if (!t) { const nz = [["e1", sub.r1], ["e2", sub.r2], ["perf", sub.rp]].filter(([, r]) => r > 0); field = nz.length === 1 ? nz[0][0] : null; }
+        }
+      } else { sub = subByName[h]; field = ex.kind; }
+      const ratio = !sub || !field ? 0 : field === "e1" ? sub.r1 : field === "e2" ? sub.r2 : sub.rp;
+      if (!ratio) return ignored.push(h);
+      cols.push({ j, sub, field, max: field === "perf" ? sub.rp : 100, docId: field === "perf" ? examIdOf(ex.sem, "final") : examIdOf(ex.sem, field) });
+    });
+    const updates = new Map(), unknown = [], mismatch = [], students = new Set();
+    let cells = 0, clamped = 0, rounded = 0, bad = 0;
+    for (let i = 1; i < rows.length; i++) {
+      const row = rows[i];
+      if (row.every((c) => String(c).trim() === "")) continue;
+      const no = matchStudent(row[0]) ?? matchStudent(row[1]);
+      if (!no) { unknown.push(`${i + 1}행`); continue; }
+      const nameCell = String(row[1] ?? "").trim();
+      if (headers[1] === "이름" && nameCell && roster[no] && nameCell !== roster[no]) { mismatch.push(`${i + 1}행(${no}번≠${nameCell})`); continue; }
+      for (const c of cols) {
+        const cell = row[c.j];
+        if (cell === "" || cell === null || cell === undefined) continue;
+        const n = Number(String(cell).trim());
+        if (!Number.isFinite(n)) { bad++; continue; }
+        if (Math.abs(n * SCALE - Math.round(n * SCALE)) > 1e-9) rounded++;
+        const s = clamp(Math.round(n * SCALE), 0, c.max * SCALE);
+        if (s !== Math.round(n * SCALE)) clamped++;
+        const key = `${no}|${c.docId}`;
+        const u = updates.get(key) || { no, docId: c.docId, patch: {} };
+        ensure(u.patch, c.field === "perf" ? "perf" : "scores")[c.sub.name] = s / SCALE;
+        updates.set(key, u);
+        students.add(no); cells++;
+      }
+    }
+    return { updates, students: students.size, unknown, mismatch, ignored, cells, clamped, rounded, bad };
+  };
+  const handleUpload = async (e) => {
+    const file = e.target.files && e.target.files[0];
+    e.target.value = "";
+    if (!file) return;
+    const ex = exam;
+    let parsed;
+    setBusy("엑셀 읽는 중...");
+    try { await loadLib("xlsx"); parsed = await parseUpload(file, ex); }
+    catch (err) { setBusy(""); return notifyError(err.message === "NO_DATA" ? "엑셀에 데이터가 없습니다." : "엑셀 파일을 읽지 못했습니다. 양식을 확인해 주세요."); }
+    setBusy("");
+    const notes = [];
+    if (parsed.unknown.length) notes.push(`• 학생을 찾지 못한 행: ${parsed.unknown.join(", ")}`);
+    if (parsed.mismatch.length) notes.push(`• 번호·이름 불일치로 건너뛴 행: ${parsed.mismatch.join(", ")}`);
+    if (parsed.ignored.length) notes.push(`• 무시한 열: ${parsed.ignored.join(", ")}`);
+    if (parsed.bad) notes.push(`• 숫자가 아닌 칸 ${parsed.bad}개 무시`);
+    if (parsed.rounded) notes.push(`• 소수 둘째 자리 이하가 있는 점수 ${parsed.rounded}개를 0.1점 단위로 반올림`);
+    if (parsed.clamped) notes.push(`• 범위를 벗어난 점수 ${parsed.clamped}개를 0~만점으로 보정`);
+    if (!parsed.updates.size) return notify("업로드할 점수 없음", notes.join("\n") || "인식된 점수가 없습니다.", "error");
+    openModal({
+      title: "업로드 확인", cancel: true, confirmText: "업로드",
+      message: `[${ex.label}]\n${parsed.students}명 · 점수 ${parsed.cells}개를 저장합니다.\n같은 칸의 기존 점수는 덮어씁니다.` + (notes.length ? `\n\n${notes.join("\n")}` : ""),
+      onConfirm: async () => {
+        const batch = writeBatch(db);
+        parsed.updates.forEach((u) => batch.set(examRef(u.no, u.docId), u.patch, { merge: true }));
+        await withTimeout(batch.commit(), 20000);
+        notify("완료", `${parsed.students}명 학생의 점수가 저장되었고, 모든 기기에 바로 반영됩니다.`, "success");
+      },
+    });
+  };
+
+  /* ── 학생 명단 ── */
+  const editRoster = () => openModal({
+    title: "학생 명단 등록/수정", cancel: true, confirmText: "저장",
+    message: "한 줄에 '번호 이름' 형식으로 적어 주세요. (예: 1 홍길동)",
+    fields: [{ key: "text", label: "명단", type: "textarea", initial: ALL_NOS.map((n) => `${n} ${roster[n] || ""}`.trim()).join("\n") }],
+    onConfirm: async ({ text }) => {
+      const batch = writeBatch(db);
+      let count = 0;
+      String(text || "").split("\n").forEach((line) => {
+        const m = line.trim().match(/^(\d{1,2})\s*번?\s+(.{1,20})$/);
+        if (!m) return;
+        const n = Number(m[1]);
+        if (n < 1 || n > STUDENT_COUNT) return;
+        batch.set(doc(db, ROOT, sidOf(n)), { no: n, name: m[2].trim() }, { merge: true });
+        count++;
+      });
+      if (!count) return "저장할 줄이 없습니다. '번호 이름' 형식인지 확인해 주세요.";
+      await withTimeout(batch.commit(), 20000);
+      notify("완료", `${count}명의 이름을 저장했습니다.`, "success");
+    },
+  });
+
+  /* ── 이미지 저장 ── */
+  const downloadImage = (areaId, filename) => {
+    if (document.activeElement && document.activeElement.blur) document.activeElement.blur();
+    window.scrollTo(0, 0);
+    setBusy("이미지 만드는 중...");
+    loadLib("h2c").then(() => {
+      setCapture(true);
+      setTimeout(async () => {
+        try {
+          const el = document.getElementById(areaId);
+          const canvas = await window.html2canvas(el, { scale: 2, backgroundColor: "#ffffff", useCORS: true, windowWidth: 1100, scrollX: 0, scrollY: 0 });
+          const a = document.createElement("a");
+          a.download = filename.replace(/\s+/g, "_");
+          a.href = canvas.toDataURL("image/png");
+          document.body.appendChild(a); a.click(); a.remove();
+          notify("완료", "이미지를 저장했습니다.\n(휴대폰은 '다운로드' 또는 '파일' 앱에서 확인하세요.)", "success");
+        } catch (err) { console.error(err); notifyError("이미지 저장 중 오류가 발생했습니다."); }
+        finally { setCapture(false); setBusy(""); }
+      }, 400);
+    }).catch(() => { setBusy(""); notifyError("이미지 기능을 불러오지 못했습니다. 네트워크를 확인해 주세요."); });
+  };
+
+  /* ── 화면 ── */
+  let content;
+  if (!authReady) {
+    content = <div className="min-h-screen flex flex-col gap-3 items-center justify-center font-bold text-emerald-600"><Spinner /><span>불러오는 중...</span></div>;
+  } else if (!role) {
+    content = <LoginScreen />;
+  } else if (listenError) {
+    content = (
+      <div className="min-h-screen bg-red-50 flex items-center justify-center p-4">
+        <div className="bg-white p-6 rounded-2xl shadow-xl w-full max-w-md border border-red-200 text-center">
+          <h1 className="text-xl font-bold text-red-600 mb-3">⚠️ 데이터를 불러오지 못했습니다</h1>
+          <p className="text-gray-700 mb-5 text-sm whitespace-pre-wrap">{errorMessage(listenError)}</p>
+          <div className="flex gap-2 justify-center">
+            <button type="button" onClick={() => window.location.reload()} className="px-4 py-2 bg-emerald-600 text-white rounded-lg font-bold text-sm">새로고침</button>
+            <button type="button" onClick={() => logout()} className="px-4 py-2 bg-gray-100 text-gray-700 rounded-lg font-bold text-sm">로그아웃</button>
+          </div>
+        </div>
+      </div>
+    );
+  } else {
+    const connected = netOnline && live;
+    const [chipCls, chipText] = SAVE_CHIP[saveStatus];
+    const allComplete = isFinal && loaded && subjects.every((s) => semesterStatus(s, exam.sem, sd).complete);
+    const selCls = "w-full p-2.5 md:p-3 rounded-lg border border-gray-300 focus:ring-2 outline-none font-bold shadow-sm text-base";
+
+    const studentPanel = (
+      <>
+        {isTeacher && !capture && (
+          <div className="bg-blue-50 border border-blue-200 p-4 md:p-6 rounded-xl shadow-sm space-y-3">
+            <h2 className="text-blue-800 font-bold text-base md:text-lg flex items-center gap-2"><BookOpen className="w-5 h-5" /> 성적 일괄 업로드 (엑셀)</h2>
+            <div className="grid md:grid-cols-2 gap-2">
+              <button type="button" onClick={downloadTemplate} className="flex items-center justify-center gap-2 bg-white border border-blue-300 text-blue-700 px-4 py-3 rounded-lg font-bold hover:bg-blue-100 text-sm"><Download className="w-5 h-5" /> [{exam.label}] 양식 내려받기</button>
+              <button type="button" onClick={() => fileRef.current && fileRef.current.click()} className="flex items-center justify-center gap-2 bg-blue-600 text-white px-4 py-3 rounded-lg font-bold hover:bg-blue-700 shadow-md text-sm"><Upload className="w-5 h-5" /> [{exam.label}] 엑셀 올리기</button>
+              <input type="file" accept=".xlsx,.xls,.csv" className="hidden" ref={fileRef} onChange={handleUpload} />
+            </div>
+            <p className="text-xs text-blue-700 leading-relaxed">첫 열은 번호(또는 '1번 홍길동'), 학기말은 '국어_1차 / 국어_2차 / 국어_수행' 형식입니다. 저장 전에 확인 창이 뜹니다.</p>
+            <details className="bg-white rounded-lg border border-blue-100 p-3">
+              <summary className="cursor-pointer text-sm font-bold text-blue-800">데이터 관리 (학생 명단)</summary>
+              <div className="mt-3">
+                <button type="button" onClick={editRoster} className="px-4 py-2 rounded-lg border border-blue-200 text-blue-700 font-bold text-sm hover:bg-blue-50">학생 명단 등록/수정</button>
+              </div>
+              <p className="mt-2 text-xs text-gray-500 leading-relaxed">학생 비밀번호 분실 시: Firebase 콘솔 → Authentication에서 해당 계정(s01@… 형식)을 삭제한 뒤 같은 이메일로 다시 추가하세요. 성적은 그대로 유지됩니다.</p>
+            </details>
+          </div>
+        )}
+
+        <div id="capture-area" className="bg-white rounded-2xl shadow-xl overflow-hidden pb-6 md:pb-8" style={capture ? { width: 900 } : undefined}>
+          <div className="bg-emerald-600 text-white p-6 md:p-8 text-center">
+            <h1 className="text-xl md:text-3xl font-bold mb-2 flex items-center justify-center gap-2"><Award className="w-6 h-6 md:w-8 md:h-8" /> 상정중 3-1 성적 향상 프로젝트 <span className="text-sm md:text-lg text-yellow-300 ml-1 font-black">{VERSION}</span></h1>
+            <p className="text-emerald-100 text-xs md:text-lg">"너희들의 빛나는 내일을 아름샘이 항상 응원해! 💪✨"</p>
+          </div>
+          <div className="p-4 md:p-8 space-y-6 md:space-y-8">
+            <section className="bg-gray-50 p-4 md:p-6 rounded-xl border border-gray-200 flex flex-col md:flex-row gap-4 md:gap-6 shadow-inner">
+              <div className="flex-1">
+                <label className="block text-xs md:text-sm font-bold text-gray-700 mb-1.5">대상 학생</label>
+                {isTeacher && !capture ? (
+                  <div className="flex gap-1.5">
+                    <button type="button" onClick={() => setSelectedNo((n) => Math.max(1, n - 1))} className="px-2 rounded-lg border border-gray-300 bg-white"><ChevronL className="w-5 h-5" /></button>
+                    <select value={selectedNo} onChange={(e) => setSelectedNo(Number(e.target.value))} className={`${selCls} text-emerald-800 focus:ring-emerald-500`}>
+                      {ALL_NOS.map((n) => <option key={n} value={n}>{studentLabel(n)}</option>)}
+                    </select>
+                    <button type="button" onClick={() => setSelectedNo((n) => Math.min(STUDENT_COUNT, n + 1))} className="px-2 rounded-lg border border-gray-300 bg-white"><ChevronR className="w-5 h-5" /></button>
+                  </div>
+                ) : <div className="w-full p-2.5 md:p-3 rounded-lg border border-gray-300 bg-white font-bold text-emerald-800">{studentLabel(activeNo)}</div>}
+              </div>
+              <div className="flex-1">
+                <label className="block text-xs md:text-sm font-bold text-gray-700 mb-1.5">분석할 시험</label>
+                {!capture ? (
+                  <select value={examId} onChange={(e) => setExamId(e.target.value)} className={`${selCls} ${isFinal ? "bg-purple-50 text-purple-800 focus:ring-purple-500" : "text-emerald-800 focus:ring-emerald-500"}`}>
+                    {EXAMS.map((e) => <option key={e.id} value={e.id}>{e.label}</option>)}
+                  </select>
+                ) : <div className="w-full p-2.5 md:p-3 rounded-lg border border-gray-300 bg-white font-bold text-emerald-800">{exam.label}</div>}
+              </div>
+            </section>
+
+            <section>
+              <h2 className={`text-lg md:text-xl font-bold flex items-center gap-2 mb-3 ${isFinal ? "text-purple-800" : "text-emerald-800"}`}><Target className="w-5 h-5 md:w-6 md:h-6" /> {isFinal ? "학기말 성적 결과" : "성적 및 목표 분석"}</h2>
+              {!loaded ? (
+                <div className="py-12 flex flex-col items-center gap-2 text-emerald-600 font-bold"><Spinner className="w-6 h-6" />{connected ? "불러오는 중..." : "서버 연결을 기다리는 중..."}</div>
               ) : (
                 <>
-                  <div className={`w-10 px-0.5 py-1 text-center rounded font-semibold text-xs ${r1===0 ? 'text-gray-400' : 'text-gray-800'}`}>{r1 === 0 ? "-" : (subject.score1 !== undefined && subject.score1 !== "" ? formatScore(Number(subject.score1)) : "")}</div>
-                  <div className={`w-10 px-0.5 py-1 text-center rounded font-semibold text-xs ${r2===0 ? 'text-gray-400' : 'text-gray-800'}`}>{r2 === 0 ? "-" : (subject.score2 !== undefined && subject.score2 !== "" ? formatScore(Number(subject.score2)) : "")}</div>
-                  <div className={`w-10 px-0.5 py-1 text-center rounded font-semibold text-xs ${rp===0 ? 'text-gray-400' : 'text-gray-800'}`}>{rp === 0 ? "-" : (subject.scorePerf !== undefined && subject.scorePerf !== "" ? formatScore(Number(subject.scorePerf)) : "")}</div>
-                </>
-              )}
-            </div>
-          </td>
-          <td className="p-1 text-center font-bold text-purple-700 text-sm bg-purple-50">
-            {/* ✅ 화면에는 반올림된 정수 점수(roundedTotalScore)를 표시합니다 */}
-            {hasAnyScore ? `${roundedTotalScore}점` : <span className="text-gray-400">-</span>}
-          </td>
-          <td className="p-1 text-center bg-purple-50">
-            {hasAnyScore ? <span className="inline-block w-6 h-6 leading-6 rounded-full font-bold text-xs bg-purple-100 text-purple-700">{currentGrade}</span> : <span className="text-gray-400 font-bold">-</span>}
-          </td>
-        </tr>
-      );
-    };
-
-    // ✅ 다짐 자동 저장 및 1500자 제한 추가
-    const ResolutionArea = ({ resolution, onUpdate, isCapturing }) => {
-      const [text, setText] = useState(resolution);
-      const debounceTimer = useRef(null);
-
-      useEffect(() => {
-        setText(resolution);
-      }, [resolution]);
-      
-      const handleChange = (e) => {
-        const val = e.target.value;
-        setText(val);
-        // 타이핑을 멈추고 0.5초가 지나면 자동으로 서버에 저장시킵니다.
-        if (debounceTimer.current) clearTimeout(debounceTimer.current);
-        debounceTimer.current = setTimeout(() => {
-          onUpdate(val);
-        }, 500);
-      };
-
-      const handleBlur = () => {
-        if (debounceTimer.current) clearTimeout(debounceTimer.current);
-        onUpdate(text);
-      };
-
-      if (isCapturing) {
-        return (
-          <div className="w-full min-h-[6rem] p-3 rounded-lg border border-gray-300 bg-gray-50 leading-relaxed whitespace-pre-wrap text-gray-800 overflow-hidden text-sm">
-            {text || "이번 시험에서 목표를 달성하기 위해 어떤 노력을 할 것인지, 스스로에게 응원의 한마디를 적어보세요!"}
-          </div>
-        );
-      }
-
-      return (
-        <textarea
-          maxLength={1500}
-          value={text}
-          onChange={handleChange}
-          onBlur={handleBlur}
-          placeholder="이번 시험에서 목표를 달성하기 위해 어떤 노력을 할 것인지, 스스로에게 응원의 한마디를 적어보세요! (최대 1500자)"
-          className="w-full h-24 p-3 rounded-lg border border-gray-300 focus:ring-2 focus:ring-emerald-500 outline-none resize-none bg-gray-50 hover:bg-white transition leading-relaxed text-sm"
-        ></textarea>
-      );
-    };
-
-    const App = () => {
-      const [user, setUser] = useState(null);
-      const [docData, setDocData] = useState(null);
-      const [authError, setAuthError] = useState(null); 
-      
-      const [loginMode, setLoginMode] = useState(null); 
-      const [currentUserRole, setCurrentUserRole] = useState(null); 
-      const [currentUserName, setCurrentUserName] = useState("");
-      
-      const [passwordInput, setPasswordInput] = useState("");
-      const [newPasswordInput, setNewPasswordInput] = useState("");
-      const [loginError, setLoginError] = useState(""); 
-      const [isLoggingIn, setIsLoggingIn] = useState(false); 
-      
-      const [selectedExam, setSelectedExam] = useState(exams[0]);
-      const [selectedStudentForTeacher, setSelectedStudentForTeacher] = useState(students[0]);
-      
-      const [isCapturing, setIsCapturing] = useState(false);
-      const fileInputRef = useRef(null);
-
-      const [modalConfig, setModalConfig] = useState(null);
-
-      const showErrorModal = (message) => setModalConfig({ type: 'alert', title: '오류 안내', message, onConfirm: () => setModalConfig(null) });
-      const showSuccessModal = (message) => setModalConfig({ type: 'alert', title: '완료', message, onConfirm: () => setModalConfig(null) });
-
-      useEffect(() => {
-        const initAuth = async () => {
-          try {
-            if (isCanvas && typeof __initial_auth_token !== 'undefined' && __initial_auth_token) {
-              await signInWithCustomToken(auth, __initial_auth_token);
-            } else {
-              await signInAnonymously(auth);
-            }
-          } catch (error) { 
-            console.error("Auth error:", error); 
-            setAuthError(error); 
-          }
-        };
-        initAuth();
-        const unsubscribe = onAuthStateChanged(auth, setUser);
-        return () => unsubscribe();
-      }, []);
-
-      useEffect(() => {
-        if (!user) return;
-        const docRef = doc(db, 'artifacts', appId, 'public', 'data', 'class_data', DOC_ID);
-        
-        const unsubscribe = onSnapshot(docRef, (snap) => {
-          if (snap.exists()) {
-            setDocData(snap.data());
-          } else {
-            const initialData = { teacherPwd: null, students: {} };
-            students.forEach(s => {
-              initialData.students[s] = { pwd: null, exams: {} };
-              exams.forEach(e => {
-                initialData.students[s].exams[e] = { subjects: [], resolution: "" };
-              });
-            });
-            setDocData(initialData); 
-            setDoc(docRef, initialData, { merge: true }).catch(e => console.error(e));
-          }
-        }, (error) => {
-          console.error(error);
-          setAuthError(error); 
-        });
-        
-        return () => unsubscribe();
-      }, [user]);
-
-      const handlePasswordChange = (e) => { setPasswordInput(e.target.value.replace(/[^0-9]/g, '')); if (loginError) setLoginError(""); };
-      const handleNewPasswordChange = (e) => { setNewPasswordInput(e.target.value.replace(/[^0-9]/g, '')); if (loginError) setLoginError(""); };
-
-      if (authError) {
-        return (
-          <div className="min-h-screen bg-red-50 flex flex-col items-center justify-center p-4 text-center font-sans">
-            <div className="bg-white p-6 rounded-2xl shadow-xl w-full border border-red-200">
-              <h1 className="text-xl font-bold text-red-600 mb-3 flex items-center justify-center gap-2">⚠️ 보안 통신 오류!</h1>
-              <p className="text-gray-700 mb-4 text-sm">파이어베이스 데이터베이스가 현재 기기 또는 와이파이에서 차단되었습니다.</p>
-              <div className="bg-red-50 p-4 rounded-lg text-left border border-red-100 text-sm">
-                <p className="text-gray-800 font-medium">학교 와이파이를 잠시 끄고 스마트폰 데이터(LTE/5G)를 켠 상태로 새로고침 해주세요.</p>
-              </div>
-            </div>
-          </div>
-        );
-      }
-
-      if (!user || !docData) {
-        return (
-          <div className="min-h-screen bg-emerald-50 flex flex-col gap-3 items-center justify-center font-bold text-emerald-600">
-            <svg className="animate-spin w-8 h-8" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path></svg>
-            <span>데이터를 안전하게 불러오는 중입니다...</span>
-          </div>
-        );
-      }
-
-      const handleTeacherLogin = async () => {
-        setLoginError("");
-        try {
-          if (!docData.teacherPwd) {
-            if (!newPasswordInput) return setLoginError("새로운 비밀번호를 입력해주세요.");
-            setIsLoggingIn(true);
-            const docRef = doc(db, 'artifacts', appId, 'public', 'data', 'class_data', DOC_ID);
-            await withTimeout(setDoc(docRef, { teacherPwd: newPasswordInput }, { merge: true }), 15000, "서버 연결 지연");
-            setCurrentUserRole('teacher'); setLoginMode(null); setNewPasswordInput(""); setIsLoggingIn(false);
-          } else {
-            if (passwordInput === docData.teacherPwd) {
-              setCurrentUserRole('teacher'); setLoginMode(null); setPasswordInput("");
-            } else { setLoginError("비밀번호가 일치하지 않습니다. 다시 확인해주세요."); }
-          }
-        } catch(e) { 
-          setIsLoggingIn(false);
-          if(e.code === 'permission-denied') {
-            showErrorModal("🚨 파이어베이스 보안 규칙 오류!\n\n파이어베이스 콘솔 -> Firestore Database -> '규칙(Rules)' 탭으로 가셔서\n\nallow read, write: if true;\n\n로 변경하신 후 '게시(Publish)'를 눌러주세요!");
-          } else {
-            setLoginError("네트워크 오류 발생. 데이터를 켜주세요!"); 
-          }
-        }
-      };
-
-      const handleStudentLogin = async () => {
-        setLoginError("");
-        if (!currentUserName) return setLoginError("본인의 이름을 먼저 체크해주세요!");
-        const studentData = (docData && docData.students && docData.students[currentUserName]) ? docData.students[currentUserName] : {};
-        
-        try {
-          if (!studentData.pwd) {
-            // ✅ 비밀번호 4자리 팝업 강제 (2~3자리 방지)
-            if (!/^\d{4}$/.test(newPasswordInput)) {
-              showErrorModal("초기 비밀번호는 반드시 숫자 4자리로만 설정해야 합니다.");
-              return;
-            }
-            setIsLoggingIn(true);
-            const docRef = doc(db, 'artifacts', appId, 'public', 'data', 'class_data', DOC_ID);
-            await withTimeout(setDoc(docRef, { students: { [currentUserName]: { pwd: newPasswordInput } } }, { merge: true }), 15000, "서버 연결 지연");
-            setCurrentUserRole('student'); setLoginMode(null); setNewPasswordInput(""); setIsLoggingIn(false);
-          } else {
-            if (passwordInput === studentData.pwd) {
-              setCurrentUserRole('student'); setLoginMode(null); setPasswordInput("");
-            } else { setLoginError("비밀번호가 틀렸습니다. 다시 한번 확인해 주세요."); }
-          }
-        } catch(e) { 
-          setIsLoggingIn(false);
-          if(e.code === 'permission-denied') {
-            showErrorModal("🚨 데이터 저장 불가!\n선생님께 파이어베이스 '보안 규칙'이 잠겨있다고 말씀해주세요.");
-          } else {
-            setLoginError("네트워크 오류 발생. 데이터를 켜주세요!"); 
-          }
-        }
-      };
-
-      if (!currentUserRole) {
-        return (
-          <div className="min-h-screen bg-emerald-50 flex flex-col items-center justify-center p-4">
-            {modalConfig && (
-              <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-[100] p-4">
-                <div className="bg-white rounded-2xl shadow-2xl p-6 w-full max-w-sm border-t-8 border-emerald-600">
-                  <h3 className={`text-lg font-bold mb-3 flex items-center gap-2 ${modalConfig.title === '오류 안내' ? 'text-red-600' : 'text-emerald-800'}`}>
-                    {modalConfig.title === '오류 안내' ? '⚠️' : (modalConfig.title === '완료' ? '✅' : <Lock className="w-5 h-5"/>)} {modalConfig.title}
-                  </h3>
-                  <p className="text-gray-700 mb-5 font-semibold leading-relaxed whitespace-pre-wrap text-sm">{modalConfig.message}</p>
-                  {modalConfig.type === 'prompt' && (
-                    <input type="text" autoFocus className="w-full p-3 border border-gray-300 rounded-lg mb-4 outline-none focus:ring-2 focus:ring-emerald-500 font-bold text-gray-800 text-sm" id="modalPromptInput" onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); modalConfig.onConfirm(e.target.value); } }} />
-                  )}
-                  <div className="flex justify-end gap-2">
-                    {modalConfig.type !== 'alert' && <button type="button" onClick={modalConfig.onCancel} className="px-4 py-2 text-gray-600 font-bold hover:bg-gray-100 rounded-lg transition text-sm">취소</button>}
-                    <button type="button" onClick={() => { modalConfig.type === 'prompt' ? modalConfig.onConfirm(document.getElementById('modalPromptInput').value) : modalConfig.onConfirm(); }} className="px-5 py-2 bg-emerald-600 text-white font-bold rounded-lg hover:bg-emerald-700 transition shadow-md text-sm">확인</button>
-                  </div>
-                </div>
-              </div>
-            )}
-
-            <div className="bg-white rounded-3xl shadow-xl overflow-hidden w-full max-w-sm relative">
-              {isLoggingIn && (
-                <div className="absolute inset-0 bg-white/80 backdrop-blur-sm flex flex-col items-center justify-center z-50">
-                   <svg className="animate-spin w-8 h-8 text-emerald-600 mb-3" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path></svg>
-                   <span className="text-lg font-bold text-emerald-800">서버 통신 중...</span>
-                </div>
-              )}
-              <div className="bg-emerald-600 p-6 text-center text-white">
-                <Award className="w-10 h-10 mx-auto mb-3" />
-                <h1 className="text-xl font-bold mb-1">상정중 3-1 성적 프로젝트 <span className="text-xs text-yellow-300 ml-1 font-black">v17.0</span></h1>
-                <p className="text-emerald-100 text-sm">아름샘이 항상 응원해! 💪✨</p>
-              </div>
-              <div className="p-6">
-                {!loginMode && (
-                  <div className="space-y-3">
-                    <button type="button" onClick={() => { setLoginMode('student'); setLoginError(""); }} className="w-full py-3.5 bg-emerald-50 hover:bg-emerald-100 text-emerald-800 rounded-xl font-bold flex items-center justify-center gap-2"><User className="w-5 h-5"/> 학생 접속</button>
-                    <button type="button" onClick={() => { setLoginMode('teacher'); setLoginError(""); }} className="w-full py-3.5 bg-blue-50 hover:bg-blue-100 text-blue-800 rounded-xl font-bold flex items-center justify-center gap-2"><Users className="w-5 h-5"/> 관리자 접속</button>
-                  </div>
-                )}
-                
-                {loginMode === 'teacher' && (
-                  <div className="space-y-4">
-                    <h2 className="text-lg font-bold text-center text-gray-800 flex items-center justify-center gap-2"><Lock className="w-4 h-4"/> 관리자 로그인</h2>
-                    {!docData.teacherPwd ? (
-                      <>
-                        <p className="text-xs text-blue-600 text-center font-bold">최초 접속입니다. 관리자 비밀번호를 설정해주세요.</p>
-                        <input type="password" value={newPasswordInput} onChange={handleNewPasswordChange} onKeyDown={(e) => { if(e.key === 'Enter') { e.preventDefault(); handleTeacherLogin(); } }} placeholder="새 비밀번호 입력" className="w-full p-3 border rounded-lg focus:ring-2 focus:ring-blue-500 outline-none text-sm" />
-                      </>
-                    ) : (
-                      <input type="password" value={passwordInput} onChange={handlePasswordChange} onKeyDown={(e) => { if(e.key === 'Enter') { e.preventDefault(); handleTeacherLogin(); } }} placeholder="비밀번호 입력" className="w-full p-3 border rounded-lg focus:ring-2 focus:ring-emerald-500 outline-none text-sm" />
-                    )}
-                    {loginError && <p className="text-red-500 font-bold text-xs text-center animate-pulse">{loginError}</p>}
-                    <button type="button" onClick={handleTeacherLogin} className="w-full py-3 text-white rounded-lg font-bold transition bg-emerald-600 hover:bg-emerald-700 text-sm">로그인</button>
-                    <button type="button" onClick={() => { setLoginMode(null); setLoginError(""); }} className="w-full py-2 text-gray-500 font-semibold text-xs">돌아가기</button>
-                    {(docData && docData.teacherPwd) && (
-                      <button type="button" onClick={() => setModalConfig({ 
-                        type: 'prompt', title: '관리자 비밀번호 초기화', message: '보안을 위해 [초기화 마스터 코드]를 입력하세요.', 
-                        onConfirm: async (code) => {
-                          if(code === "상정중") {
-                            setModalConfig(null); setIsLoggingIn(true);
-                            const docRef = doc(db, 'artifacts', appId, 'public', 'data', 'class_data', DOC_ID);
-                            await setDoc(docRef, { teacherPwd: null }, { merge: true }).catch(console.error);
-                            showSuccessModal("비밀번호가 초기화되었습니다."); setLoginMode(null); setIsLoggingIn(false);
-                          } else { showErrorModal("마스터 코드가 틀렸습니다."); }
-                      }, onCancel: () => setModalConfig(null) })} className="w-full text-red-400 text-xs font-semibold underline mt-1">비밀번호를 잊으셨나요? (초기화)</button>
-                    )}
-                  </div>
-                )}
-                
-                {loginMode === 'student' && (
-                  <div className="space-y-4">
-                    <h2 className="text-lg font-bold text-center text-gray-800 flex items-center justify-center gap-2"><User className="w-4 h-4"/> 학생 선택</h2>
-                    <div className="w-full border rounded-lg max-h-56 overflow-y-auto bg-white custom-scrollbar shadow-inner text-left">
-                      {students.map(s => (
-                        <label key={s} className={`flex items-center justify-between p-3 border-b border-gray-100 cursor-pointer transition ${currentUserName === s ? 'bg-emerald-50' : 'hover:bg-gray-50'}`}>
-                          <span className={`font-bold text-sm ${currentUserName === s ? 'text-emerald-700' : 'text-gray-700'}`}>{s}</span>
-                          <input type="radio" name="studentSelect" value={s} checked={currentUserName === s} onChange={(e) => { setCurrentUserName(e.target.value); setPasswordInput(""); setNewPasswordInput(""); setLoginError(""); }} className="w-5 h-5 accent-emerald-600 cursor-pointer" />
-                        </label>
-                      ))}
-                    </div>
-                    {currentUserName && !(docData && docData.students && docData.students[currentUserName] && docData.students[currentUserName].pwd) && (
-                      <div className="p-4 bg-yellow-50 rounded-lg border border-yellow-200">
-                        <p className="text-xs text-yellow-800 font-semibold mb-2">최초 접속입니다. <span className="text-red-500">숫자 4자리</span>로 설정하세요.</p>
-                        {/* ✅ 비밀번호 4자리 강제 */}
-                        <input type="password" maxLength="4" value={newPasswordInput} onChange={handleNewPasswordChange} onKeyDown={(e) => { if(e.key === 'Enter') { e.preventDefault(); handleStudentLogin(); } }} placeholder="숫자 4자리" className="w-full p-3 border border-yellow-300 rounded-lg text-center tracking-widest text-lg font-bold mb-3 outline-none focus:ring-2 focus:ring-yellow-500" />
-                        {loginError && <p className="text-red-500 font-bold text-xs mb-2 text-center animate-pulse">{loginError}</p>}
-                        <button type="button" onClick={handleStudentLogin} className="w-full py-3 text-white rounded-lg font-bold transition bg-yellow-500 hover:bg-yellow-600 text-sm shadow-md">비밀번호 설정 및 시작</button>
-                      </div>
-                    )}
-                    {currentUserName && (docData && docData.students && docData.students[currentUserName] && docData.students[currentUserName].pwd) && (
-                      <>
-                        {/* ✅ 기존 로그인 창도 4자리 강제 */}
-                        <input type="password" maxLength="4" value={passwordInput} onChange={handlePasswordChange} onKeyDown={(e) => { if(e.key === 'Enter') { e.preventDefault(); handleStudentLogin(); } }} placeholder="비밀번호 입력" className="w-full p-3 border rounded-lg outline-none text-center tracking-widest text-lg focus:ring-2 focus:ring-emerald-500" />
-                        {loginError && <p className="text-red-500 font-bold text-xs mb-2 text-center animate-pulse">{loginError}</p>}
-                        <button type="button" onClick={handleStudentLogin} className="w-full py-3 text-white rounded-lg font-bold transition bg-emerald-600 hover:bg-emerald-700 text-sm shadow-md">로그인</button>
-                      </>
-                    )}
-                    <button type="button" onClick={() => { setLoginMode(null); setLoginError(""); setCurrentUserName(""); }} className="w-full py-2 text-gray-500 font-semibold text-xs">돌아가기</button>
-                  </div>
-                )}
-              </div>
-            </div>
-          </div>
-        );
-      }
-
-      // --- DASHBOARD UI ---
-      const activeStudent = currentUserRole === 'teacher' ? selectedStudentForTeacher : currentUserName;
-      const activeStudentData = docData && docData.students && docData.students[activeStudent] && docData.students[activeStudent].exams ? docData.students[activeStudent].exams[selectedExam] : null;
-      
-      const isSem2 = selectedExam.includes("2학기");
-      const currentFixedSubjects = isSem2 ? FIXED_SUBJECTS_SEM2 : FIXED_SUBJECTS_SEM1;
-
-      const activeSubjects = activeStudentData && activeStudentData.subjects ? activeStudentData.subjects : [];
-      const mergedSubjects = currentFixedSubjects.map((fixedSub, idx) => {
-        const existing = activeSubjects.find(s => s.name === fixedSub.name);
-        
-        let autoPrevScore = "";
-        const isSecondExamView = selectedExam.includes("2차시험");
-        if (isSecondExamView) {
-          const firstExamName = selectedExam.replace("2차시험", "1차시험");
-          const firstExamData = docData?.students?.[activeStudent]?.exams?.[firstExamName];
-          if (firstExamData && firstExamData.subjects) {
-             const prevSub = firstExamData.subjects.find(s => s.name === fixedSub.name);
-             if (prevSub && prevSub.score !== undefined && prevSub.score !== "") {
-               autoPrevScore = prevSub.score;
-             }
-          }
-        }
-        
-        const finalPrevScore = autoPrevScore !== "" ? Number(autoPrevScore) : (existing && existing.prevScore !== undefined && existing.prevScore !== "" ? Number(existing.prevScore) : "");
-
-        return {
-          id: existing ? existing.id : `fixed_${idx}`,
-          name: fixedSub.name,
-          ratio1: fixedSub.ratio1,
-          ratio2: fixedSub.ratio2,
-          ratioPerf: fixedSub.ratioPerf,
-          target: existing && existing.target !== undefined && existing.target !== "" ? Number(existing.target) : "",
-          score: existing && existing.score !== undefined && existing.score !== "" ? Number(existing.score) : "",
-          prevScore: finalPrevScore,
-          score1: existing && existing.score1 !== undefined && existing.score1 !== "" ? Number(existing.score1) : "",
-          score2: existing && existing.score2 !== undefined && existing.score2 !== "" ? Number(existing.score2) : "",
-          scorePerf: existing && existing.scorePerf !== undefined && existing.scorePerf !== "" ? Number(existing.scorePerf) : "",
-          expectedPerf: existing && existing.expectedPerf !== undefined ? Number(existing.expectedPerf) : fixedSub.ratioPerf,
-        };
-      });
-
-      const activeResolution = activeStudentData && activeStudentData.resolution ? activeStudentData.resolution : "";
-      const isSemesterFinal = selectedExam.includes("학기말");
-      const isFirstExam = selectedExam.includes("1차시험");
-      const isSecondExam = selectedExam.includes("2차시험");
-      const isSem1Exam1 = selectedExam === "3학년 1학기 1차시험"; 
-      
-      const isAllSemesterScoresEntered = mergedSubjects.every(sub => {
-        const r1 = Number(sub.ratio1) || 0;
-        const r2 = Number(sub.ratio2) || 0;
-        const rp = Number(sub.ratioPerf) || 0;
-        const s1Valid = r1 === 0 || (sub.score1 !== "" && sub.score1 !== null && sub.score1 !== undefined);
-        const s2Valid = r2 === 0 || (sub.score2 !== "" && sub.score2 !== null && sub.score2 !== undefined);
-        const spValid = rp === 0 || (sub.scorePerf !== "" && sub.scorePerf !== null && sub.scorePerf !== undefined);
-        return s1Valid && s2Valid && spValid;
-      });
-
-      const handleLogout = () => { setCurrentUserRole(null); setCurrentUserName(""); setPasswordInput(""); setNewPasswordInput(""); setLoginMode(null); setLoginError(""); };
-
-      const handleTeacherPwdChange = () => {
-        setModalConfig({
-          type: 'prompt', title: '관리자 비밀번호 변경', message: '새로운 관리자 비밀번호를 입력하세요:',
-          onConfirm: async (newPwd) => {
-            if (newPwd) {
-              setModalConfig(null); setIsLoggingIn(true);
-              const docRef = doc(db, 'artifacts', appId, 'public', 'data', 'class_data', DOC_ID);
-              await withTimeout(setDoc(docRef, { teacherPwd: newPwd }, { merge: true }), 15000, "서버 연결 지연");
-              setIsLoggingIn(false); showSuccessModal("비밀번호가 변경되었습니다.");
-            } else { setModalConfig(null); }
-          },
-          onCancel: () => setModalConfig(null)
-        });
-      };
-
-      const handleResetStudentPwd = () => {
-        setModalConfig({
-          type: 'confirm', title: '비밀번호 초기화', message: `${selectedStudentForTeacher} 학생의 비밀번호를 '0000'으로 초기화하시겠습니까?`,
-          onConfirm: async () => {
-            setModalConfig(null); setIsLoggingIn(true);
-            const docRef = doc(db, 'artifacts', appId, 'public', 'data', 'class_data', DOC_ID);
-            await withTimeout(setDoc(docRef, { students: { [selectedStudentForTeacher]: { pwd: "0000" } } }, { merge: true }), 15000, "서버 연결 지연");
-            setIsLoggingIn(false); showSuccessModal(`${selectedStudentForTeacher} 학생의 비밀번호가 '0000'으로 초기화되었습니다.`);
-          },
-          onCancel: () => setModalConfig(null)
-        });
-      };
-
-      const updateStudentData = async (studentName, exam, field, value) => {
-        setDocData(prevData => {
-            if (!prevData) return prevData;
-            const newData = JSON.parse(JSON.stringify(prevData));
-            if (!newData.students[studentName]) newData.students[studentName] = { exams: {} };
-            if (!newData.students[studentName].exams[exam]) newData.students[studentName].exams[exam] = {};
-            newData.students[studentName].exams[exam][field] = value;
-            return newData;
-        });
-        try {
-          const docRef = doc(db, 'artifacts', appId, 'public', 'data', 'class_data', DOC_ID);
-          await setDoc(docRef, { students: { [studentName]: { exams: { [exam]: { [field]: value } } } } }, { merge: true });
-        } catch(e) { console.error("Auto-save failed", e); }
-      };
-
-      const handleSubjectChange = (subjectName, field, value) => {
-        const activeStudent = currentUserRole === 'teacher' ? selectedStudentForTeacher : currentUserName;
-        let currentSubjects = [...(docData.students[activeStudent]?.exams[selectedExam]?.subjects || [])];
-        const isSem2 = selectedExam.includes("2학기");
-        const currentFixedSubjects = isSem2 ? FIXED_SUBJECTS_SEM2 : FIXED_SUBJECTS_SEM1;
-        
-        const index = currentSubjects.findIndex(s => s.name === subjectName);
-        if (index >= 0) {
-            currentSubjects[index][field] = value;
-        } else {
-            const fixedSub = currentFixedSubjects.find(s => s.name === subjectName);
-            currentSubjects.push({ id: Date.now(), name: subjectName, ratio1: fixedSub.ratio1, ratio2: fixedSub.ratio2, ratioPerf: fixedSub.ratioPerf, target: "", score: "", prevScore: "", score1: "", score2: "", scorePerf: "", expectedPerf: fixedSub.ratioPerf, [field]: value });
-        }
-        
-        setDocData(prev => {
-          const newData = JSON.parse(JSON.stringify(prev));
-          if (!newData.students[activeStudent]) newData.students[activeStudent] = { exams: {} };
-          if (!newData.students[activeStudent].exams[selectedExam]) newData.students[activeStudent].exams[selectedExam] = { subjects: [] };
-          newData.students[activeStudent].exams[selectedExam].subjects = currentSubjects;
-          return newData;
-        });
-
-        const docRef = doc(db, 'artifacts', appId, 'public', 'data', 'class_data', DOC_ID);
-        setDoc(docRef, { students: { [activeStudent]: { exams: { [selectedExam]: { subjects: currentSubjects } } } } }, { merge: true }).catch(console.error);
-      };
-
-      const handleBulkFileUpload = async (e) => {
-        const file = e.target.files[0];
-        if (!file) return;
-
-        if (typeof window.XLSX === 'undefined') return showErrorModal("엑셀 기능 로딩 중입니다. 잠시 후 다시 시도해주세요.");
-
-        const reader = new FileReader();
-        reader.onload = async (evt) => {
-          setIsLoggingIn(true); 
-          try {
-            const bstr = evt.target.result;
-            const wb = window.XLSX.read(bstr, { type: 'binary' });
-            const ws = wb.Sheets[wb.SheetNames[0]];
-            const data = window.XLSX.utils.sheet_to_json(ws, { header: 1 });
-            
-            if (data.length < 2) { showErrorModal("데이터가 부족합니다."); setIsLoggingIn(false); return; }
-
-            const headers = data[0];
-            const updates = { students: {} };
-            const isSemesterFinal = selectedExam.includes("학기말");
-            const isSem2 = selectedExam.includes("2학기");
-            const currentFixedSubjects = isSem2 ? FIXED_SUBJECTS_SEM2 : FIXED_SUBJECTS_SEM1;
-            const validSubjectNames = currentFixedSubjects.map(s => s.name);
-
-            for (let i = 1; i < data.length; i++) {
-              const row = data[i];
-              const studentName = row[0] ? String(row[0]).trim() : "";
-              if (students.includes(studentName)) {
-                const existingSubjects = (docData && docData.students && docData.students[studentName] && docData.students[studentName].exams && docData.students[studentName].exams[selectedExam] && docData.students[studentName].exams[selectedExam].subjects) || [];
-                let newSubjectsMap = new Map();
-                existingSubjects.forEach(s => newSubjectsMap.set(s.name, { ...s }));
-                
-                for (let j = 1; j < headers.length; j++) {
-                  if (!headers[j] || row[j] === undefined || row[j] === "" || isNaN(Number(row[j]))) continue;
-                  const rawScore = Number(row[j]);
-                  
-                  if (isSemesterFinal) {
-                    const parts = String(headers[j]).trim().split('_');
-                    const subjName = parts[0];
-                    const type = parts[1]; 
-                    if(!validSubjectNames.includes(subjName)) continue;
-
-                    if (!newSubjectsMap.has(subjName)) newSubjectsMap.set(subjName, { id: Date.now() + Math.random(), name: subjName, ratio1: currentFixedSubjects.find(s => s.name === subjName).ratio1, ratio2: currentFixedSubjects.find(s => s.name === subjName).ratio2, ratioPerf: currentFixedSubjects.find(s => s.name === subjName).ratioPerf });
-                    let subjObj = newSubjectsMap.get(subjName);
-                    if (type === '1차') subjObj.score1 = Math.max(0, Math.min(100, rawScore));
-                    else if (type === '2차') subjObj.score2 = Math.max(0, Math.min(100, rawScore));
-                    else if (type === '수행') subjObj.scorePerf = Math.max(0, Math.min(subjObj.ratioPerf, rawScore)); 
-                    else subjObj.score1 = Math.max(0, Math.min(100, rawScore)); 
-                  } else {
-                    const subjName = String(headers[j]).trim();
-                    if(!validSubjectNames.includes(subjName)) continue;
-
-                    if (!newSubjectsMap.has(subjName)) newSubjectsMap.set(subjName, { id: Date.now() + Math.random(), name: subjName, ratio1: currentFixedSubjects.find(s => s.name === subjName).ratio1, ratio2: currentFixedSubjects.find(s => s.name === subjName).ratio2, ratioPerf: currentFixedSubjects.find(s => s.name === subjName).ratioPerf, target: "", score: "", expectedPerf: currentFixedSubjects.find(s => s.name === subjName).ratioPerf });
-                    newSubjectsMap.get(subjName).score = Math.max(0, Math.min(100, rawScore));
-                  }
-                }
-                const newSubjectsArray = Array.from(newSubjectsMap.values());
-                if(newSubjectsArray.length > 0) {
-                  if(!updates.students[studentName]) updates.students[studentName] = { exams: {} };
-                  updates.students[studentName].exams[selectedExam] = { subjects: newSubjectsArray };
-                }
-              }
-            }
-
-            if (Object.keys(updates.students).length > 0) {
-              const docRef = doc(db, 'artifacts', appId, 'public', 'data', 'class_data', DOC_ID);
-              await withTimeout(setDoc(docRef, updates, { merge: true }), 15000, "서버 저장 지연");
-              showSuccessModal(`${Object.keys(updates.students).length}명 학생의 성적이 엑셀로부터 클라우드 서버에 완벽히 등록되었습니다!`);
-            } else { showErrorModal("엑셀 파일에 유효한 학생 데이터가 없습니다."); }
-          } catch (error) {
-            if(error.code === 'permission-denied') {
-              showErrorModal("🚨 업로드 불가 (보안 규칙 오류)\n\n파이어베이스 '규칙(Rules)' 탭에서\nallow read, write: if true;\n로 변경해야만 합니다!");
-            } else {
-              showErrorModal("파일 업로드 중 인터넷 통신 오류가 발생했습니다.");
-            }
-          } finally {
-            setIsLoggingIn(false);
-          }
-        };
-        reader.readAsBinaryString(file);
-        if(fileInputRef.current) fileInputRef.current.value = '';
-      };
-
-      const handleDownloadImage = () => {
-        if (typeof window.html2canvas === 'undefined') return showErrorModal("이미지 모듈 로딩 중입니다.");
-        window.scrollTo(0, 0);
-        setIsCapturing(true); 
-        setTimeout(async () => {
-          const element = document.getElementById('capture-area');
-          try {
-            const canvas = await window.html2canvas(element, { scale: 2, backgroundColor: '#f0fdf4', useCORS: true, scrollY: -window.scrollY });
-            const link = document.createElement('a');
-            link.download = `${activeStudent}_${selectedExam}_분석결과.png`;
-            link.href = canvas.toDataURL('image/png');
-            link.click();
-            showSuccessModal("이미지가 저장되었습니다!");
-          } catch (err) { showErrorModal("이미지 저장 중 오류 발생"); } 
-          finally { setIsCapturing(false); }
-        }, 200); 
-      };
-
-      return (
-        <div className="min-h-screen bg-emerald-50 py-8 px-4 font-sans text-gray-800 relative">
-          {isLoggingIn && currentUserRole && (
-            <div className="fixed inset-0 bg-white/70 backdrop-blur-sm flex flex-col items-center justify-center z-[200]">
-               <svg className="animate-spin w-12 h-12 text-emerald-600 mb-3" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path></svg>
-               <span className="text-xl font-bold text-emerald-800">안전하게 처리 중...</span>
-            </div>
-          )}
-
-          <div className="max-w-5xl mx-auto space-y-6">
-            {!isCapturing && (
-              <div className="flex justify-between items-center bg-white p-3 md:p-4 rounded-xl shadow-sm">
-                <div className="flex items-center gap-2 md:gap-3">
-                   <div className={`p-2 rounded-lg ${currentUserRole === 'teacher' ? 'bg-blue-100 text-blue-700' : 'bg-emerald-100 text-emerald-700'}`}>
-                     {currentUserRole === 'teacher' ? <Users className="w-4 h-4 md:w-5 md:h-5" /> : <User className="w-4 h-4 md:w-5 md:h-5" />}
-                   </div>
-                   <span className="font-bold text-sm md:text-lg">{currentUserRole === 'teacher' ? '김아름 선생님 모드' : currentUserName}</span>
-                </div>
-                <div className="flex gap-2 md:gap-4 items-center">
-                  <div className="hidden md:block">
-                     <span className="bg-yellow-100 text-yellow-800 px-3 py-1 rounded-full text-xs font-bold mr-2">데이터는 자동으로 실시간 저장됩니다.</span>
-                  </div>
-                  {currentUserRole === 'teacher' && (
-                    <button type="button" onClick={handleTeacherPwdChange} className="hidden md:flex text-sm font-semibold text-gray-500 hover:text-blue-600 items-center gap-1"><Settings className="w-4 h-4"/> 비밀번호 변경</button>
-                  )}
-                  <button type="button" onClick={handleLogout} className="flex items-center gap-1.5 text-gray-500 hover:text-red-500 font-semibold text-xs md:text-sm"><LogOut className="w-4 h-4" /> 로그아웃</button>
-                </div>
-              </div>
-            )}
-
-            {currentUserRole === 'teacher' && !isCapturing && (
-              <div className="bg-blue-50 border border-blue-200 p-4 md:p-6 rounded-xl shadow-sm">
-                 <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 mb-4">
-                   <h2 className="text-blue-800 font-bold text-base md:text-lg flex items-center gap-2">
-                     <BookOpen className="w-5 h-5" /> 성적 일괄 업로드 (엑셀)
-                   </h2>
-                   <button type="button" onClick={handleTeacherPwdChange} className="md:hidden text-xs font-semibold text-blue-600 underline">관리자 비밀번호 변경</button>
-                 </div>
-                 
-                 <div className="flex flex-col md:flex-row gap-3 items-end">
-                    <div className="flex-1 w-full relative">
-                       <input type="file" accept=".xlsx, .xls" className="hidden" ref={fileInputRef} onChange={handleBulkFileUpload} />
-                       <button type="button" onClick={() => { if (fileInputRef.current) fileInputRef.current.click() }} className="w-full flex items-center justify-center gap-2 bg-blue-600 text-white px-4 py-3 rounded-lg font-bold hover:bg-blue-700 transition shadow-md text-sm md:text-base">
-                         <Upload className="w-5 h-5" /> [{selectedExam}] 엑셀 올리기
-                       </button>
-                    </div>
-                 </div>
-              </div>
-            )}
-
-            <div id="capture-area" className="bg-white rounded-2xl shadow-xl overflow-hidden pb-6 md:pb-8">
-              <div className="bg-emerald-600 text-white p-6 md:p-8 text-center">
-                <h1 className="text-xl md:text-3xl font-bold mb-2 flex items-center justify-center gap-2"><Award className="w-6 h-6 md:w-8 md:h-8" /> 상정중 3-1 성적 향상 프로젝트 <span className="text-sm md:text-lg text-yellow-300 ml-1 font-black">v17.0</span></h1>
-                <p className="text-emerald-100 text-xs md:text-lg">"너희들의 빛나는 내일을 아름샘이 항상 응원해! 💪✨"</p>
-              </div>
-
-              <div className="p-4 md:p-8 space-y-6 md:space-y-8">
-                <section className="bg-gray-50 p-4 md:p-6 rounded-xl border border-gray-200 flex flex-col md:flex-row gap-4 md:gap-6 shadow-inner">
-                  <div className="flex-1">
-                    <label className="block text-xs md:text-sm font-bold text-gray-700 mb-1.5 md:mb-2">대상 학생</label>
-                    {currentUserRole === 'teacher' && !isCapturing ? (
-                       <div className="flex gap-2 items-stretch">
-                         <select value={selectedStudentForTeacher} onChange={(e) => setSelectedStudentForTeacher(e.target.value)} className="flex-1 p-2.5 md:p-3 rounded-lg border border-gray-300 focus:ring-2 focus:ring-emerald-500 font-bold text-emerald-800 outline-none shadow-sm text-sm md:text-base">
-                           {students.map(s => <option key={s} value={s}>{s}</option>)}
-                         </select>
-                         <button type="button" onClick={handleResetStudentPwd} className="px-3 text-[11px] md:text-xs font-bold bg-red-50 text-red-600 rounded-lg border border-red-200 hover:bg-red-100 transition shadow-sm leading-tight">
-                           비밀번호<br/>0000 초기화
-                         </button>
-                       </div>
-                    ) : (
-                      <div className="w-full p-2.5 md:p-3 rounded-lg border border-gray-300 bg-white font-bold text-emerald-800 text-sm md:text-base">{activeStudent}</div>
-                    )}
-                  </div>
-                  <div className="flex-1">
-                    <label className="block text-xs md:text-sm font-bold text-gray-700 mb-1.5 md:mb-2">분석할 시험</label>
-                    {!isCapturing ? (
-                      <select value={selectedExam} onChange={(e) => setSelectedExam(e.target.value)} className={`w-full p-2.5 md:p-3 rounded-lg border border-gray-300 focus:ring-2 outline-none font-bold shadow-sm text-sm md:text-base ${isSemesterFinal ? 'bg-purple-50 text-purple-800 focus:ring-purple-500' : 'text-emerald-800 focus:ring-emerald-500'}`}>
-                        {exams.map(exam => <option key={exam} value={exam}>{exam}</option>)}
-                      </select>
-                    ) : (
-                      <div className="w-full p-2.5 md:p-3 rounded-lg border border-gray-300 bg-white font-bold text-emerald-800 text-sm md:text-base">{selectedExam}</div>
-                    )}
-                  </div>
-                </section>
-
-                <section>
-                  <div className="flex justify-between items-end mb-3 md:mb-4">
-                    <h2 className={`text-lg md:text-xl font-bold flex items-center gap-1.5 md:gap-2 ${isSemesterFinal ? 'text-purple-800' : 'text-emerald-800'}`}>
-                      <Target className="w-5 h-5 md:w-6 md:h-6" /> {isSemesterFinal ? '학기말 성적 결과' : '성적 및 목표 분석'}
-                    </h2>
-                  </div>
-
-                  <div className="overflow-x-auto rounded-xl border border-gray-200 shadow-sm custom-scrollbar">
-                    <table className="w-full text-left border-collapse min-w-[500px] md:min-w-[700px] bg-white">
+                  <div className={`${capture ? "" : "overflow-x-auto"} rounded-xl border border-gray-200 shadow-sm`}>
+                    <table className="w-full text-left border-collapse min-w-[640px] md:min-w-[780px] bg-white">
                       <thead>
-                        {isSemesterFinal ? (
+                        {isFinal ? (
                           <tr className="bg-purple-50 text-purple-800 border-b-2 border-purple-200 text-xs md:text-sm">
-                            <th className="p-2 md:p-4 font-bold text-center">과목</th>
-                            <th className="p-2 md:p-4 font-bold border-r border-purple-100 text-center whitespace-nowrap"><span className="block text-[10px] md:text-xs font-normal text-purple-600 mb-0.5">1차:2차:수행</span>반영비율</th>
-                            <th className="p-2 md:p-4 font-bold text-center"><span className="block text-[10px] md:text-xs font-normal text-purple-600 mb-0.5">1차 / 2차 / 수행</span>내 점수</th>
-                            <th className="p-2 md:p-4 font-bold text-center bg-purple-100/50">환산총점</th>
-                            <th className="p-2 md:p-4 font-bold text-center bg-purple-100/50">성취도</th>
+                            <th className="p-2 md:p-3 font-bold text-center">과목</th>
+                            <th className="p-2 md:p-3 font-bold text-center whitespace-nowrap"><span className="block text-[10px] font-normal text-purple-600">1차:2차:수행</span>반영비율</th>
+                            <th className="p-2 md:p-3 font-bold text-center"><span className="block text-[10px] font-normal text-purple-600">1차 / 2차 / 수행</span>점수</th>
+                            <th className="p-2 md:p-3 font-bold text-center bg-purple-100/50">환산총점</th>
+                            <th className="p-2 md:p-3 font-bold text-center bg-purple-100/50">성취도</th>
+                            {exam.id === "s2f" && <th className="p-2 md:p-3 font-bold text-center bg-purple-100/50">1학기 대비</th>}
                           </tr>
                         ) : (
                           <tr className="bg-emerald-50 text-emerald-800 border-b-2 border-emerald-200 text-xs md:text-sm">
-                            <th className="p-2 md:p-4 font-bold text-center">과목</th>
-                            {isSecondExam && <th className="p-2 md:p-4 font-bold text-center border-r border-emerald-100">1차점수</th>}
-                            <th className="p-2 md:p-4 font-bold text-center border-r border-emerald-100">목표</th>
-                            <th className="p-2 md:p-4 font-bold text-center">실제</th>
-                            <th className="p-2 md:p-4 font-bold text-center">차이</th>
-                            <th className="p-2 md:p-4 font-bold text-center border-r border-emerald-100">성취도</th>
-                            {isSem1Exam1 && <th className="p-2 md:p-4 font-bold bg-yellow-100 text-center">다음 등급을 위해</th>}
+                            <th className="p-2 md:p-3 font-bold text-center">과목</th>
+                            <th className="p-2 md:p-3 font-bold text-center">목표</th>
+                            <th className="p-2 md:p-3 font-bold text-center">실제</th>
+                            <th className="p-2 md:p-3 font-bold text-center">목표 대비</th>
+                            <th className="p-2 md:p-3 font-bold text-center">직전 대비</th>
+                            <th className="p-2 md:p-3 font-bold text-center">성취도<span className="block text-[10px] font-normal">(참고)</span></th>
+                            <th className="p-2 md:p-3 font-bold bg-yellow-100 text-center">다음 등급을 위해<span className="block text-[10px] font-normal">{exam.kind === "e1" ? "필요한 2차 점수" : "필요한 수행 점수"}</span></th>
                           </tr>
                         )}
                       </thead>
                       <tbody>
-                        {mergedSubjects.map((subject) => isSemesterFinal ? 
-                          <SemesterRow key={subject.id} subject={subject} onUpdate={handleSubjectChange} isCapturing={isCapturing} currentUserRole={currentUserRole} /> : 
-                          <StandardRow key={subject.id} subject={subject} isFirstExam={isFirstExam} isSecondExam={isSecondExam} isSem1Exam1={isSem1Exam1} onUpdate={handleSubjectChange} isCapturing={isCapturing} currentUserRole={currentUserRole} />
-                        )}
+                        {subjects.map((s) => isFinal
+                          ? <SemesterRow key={s.name} sub={s} exam={exam} sd={sd} isTeacher={isTeacher} capture={capture} showDelta={exam.id === "s2f"}
+                              onE1={setScore(examIdOf(exam.sem, "e1"), s.name)} onE2={setScore(examIdOf(exam.sem, "e2"), s.name)} onPerf={setPerf(s.name)} />
+                          : <ExamRow key={s.name} sub={s} exam={exam} sd={sd} isTeacher={isTeacher} capture={capture}
+                              onScore={setScore(examId, s.name)} onTarget={setTarget(s.name)} onExpPerf={setExpPerf(s.name)} />)}
                       </tbody>
                     </table>
                   </div>
-                </section>
-
-                {!isSemesterFinal && (
-                  <section>
-                    <h2 className="text-lg md:text-xl font-bold text-emerald-800 mb-3 md:mb-4 flex items-center gap-1.5 md:gap-2"><PenTool className="w-5 h-5 md:w-6 md:h-6" /> 나의 다짐</h2>
-                    <ResolutionArea resolution={activeResolution} onUpdate={(val) => updateStudentData(activeStudent, selectedExam, 'resolution', val)} isCapturing={isCapturing} />
-                  </section>
-                )}
-
-                {isSemesterFinal && isAllSemesterScoresEntered && (
-                  <div className="bg-emerald-50 p-4 md:p-5 rounded-xl mt-4 md:mt-6 border border-emerald-200 shadow-md">
-                    <p className="font-bold text-emerald-900 mb-1 flex items-center gap-1.5 md:gap-2 text-sm md:text-base"><Info className="w-4 h-4 md:w-5 md:h-5"/> 아름샘의 한마디:</p>
-                    {selectedExam === "3학년 1학기말 성적" ? (
-                      <p className="text-emerald-800 text-sm md:text-lg">"1학기 동안 정말 고생 많았어! 부족했던 점은 방학 동안 보완하고, 2학기에는 더 높이 날아오를 너희를 기대할게. 화이팅! 🚀"</p>
-                    ) : (
-                      <p className="text-emerald-800 text-sm md:text-lg">"중학교 3학년, 1년 동안 정말 고생 많았어! 너희들의 새로운 시작과 빛나는 고등학교 생활을 언제나 응원할게. 졸업 축하해! 🎓✨"</p>
-                    )}
+                  <div className="mt-2 text-[11px] md:text-xs text-gray-500 space-y-0.5">
+                    {isFinal ? <>
+                      <p>※ 환산총점 = 1차×반영비율 + 2차×반영비율 + 수행. 소수 첫째 자리에서 반올림해 성취도를 정합니다. (괄호 안은 반올림 전)</p>
+                      <p>※ 1·2차 점수는 시험 화면과 같은 데이터입니다. 어느 쪽에서 고쳐도 함께 바뀝니다.</p>
+                    </> : <>
+                      <p>※ 이 화면의 성취도는 이번 시험 점수만으로 본 참고용입니다. 실제 성취도는 학기말 환산총점으로 정해집니다.</p>
+                      <p>※ 필요 점수는 0.1점 단위이며, 학기말 반올림 기준(예: 89.5점 → 90점 → A)으로 계산했습니다.</p>
+                    </>}
                   </div>
-                )}
-              </div>
-            </div>
+                </>
+              )}
+            </section>
 
-            {!isCapturing && (
-              <div className="pt-4 md:pt-6 flex justify-center pb-8">
-                 <button type="button" onClick={handleDownloadImage} className={`w-full md:w-auto inline-flex justify-center items-center gap-2 text-white px-6 md:px-8 py-3.5 md:py-4 rounded-full font-bold text-base md:text-lg transition shadow-lg ${isSemesterFinal ? 'bg-purple-700 hover:bg-purple-800' : 'bg-gray-800 hover:bg-gray-900'}`}>
-                   <ImageIcon className="w-5 h-5 md:w-6 md:h-6" /> 이 화면을 이미지로 저장하기
-                 </button>
-              </div>
+            {!isFinal && loaded && (
+              <section>
+                <h2 className="text-lg md:text-xl font-bold text-emerald-800 mb-3 flex items-center gap-2"><PenTool className="w-5 h-5 md:w-6 md:h-6" /> 나의 다짐</h2>
+                <ResolutionArea key={`${activeNo}_${examId}`} value={sd[examId]?.plan?.resolution || ""} onSave={saveResolution(activeNo, examId)} capture={capture} />
+              </section>
             )}
 
+            {loaded && (
+              <section>
+                <h2 className="text-lg md:text-xl font-bold text-emerald-800 mb-3 flex items-center gap-2"><BarChart className="w-5 h-5 md:w-6 md:h-6" /> {isTeacher ? "학생 성적 분석" : "내 성적 분석"}</h2>
+                <MyAnalysis sd={sd} exam={exam} />
+              </section>
+            )}
+
+            {allComplete && (
+              <div className="bg-emerald-50 p-4 md:p-5 rounded-xl border border-emerald-200 shadow-md">
+                <p className="font-bold text-emerald-900 mb-1 flex items-center gap-2 text-sm md:text-base"><Info className="w-4 h-4 md:w-5 md:h-5" /> 아름샘의 한마디:</p>
+                {exam.sem === 1
+                  ? <p className="text-emerald-800 text-sm md:text-lg">"1학기 동안 정말 고생 많았어! 부족했던 점은 방학 동안 보완하고, 2학기에는 더 높이 날아오를 너희를 기대할게. 화이팅! 🚀"</p>
+                  : <p className="text-emerald-800 text-sm md:text-lg">"중학교 3학년, 1년 동안 정말 고생 많았어! 너희들의 새로운 시작과 빛나는 고등학교 생활을 언제나 응원할게. 졸업 축하해! 🎓✨"</p>}
+              </div>
+            )}
           </div>
         </div>
-      );
-    };
 
-    const root = ReactDOM.createRoot(document.getElementById('root'));
-    root.render(<App />);
-  </script>
+        {!capture && (
+          <div className="pt-2 flex justify-center pb-8">
+            <button type="button" onClick={() => downloadImage("capture-area", `${studentLabel(activeNo)}_${exam.label}_분석결과.png`)}
+              className={`w-full md:w-auto inline-flex justify-center items-center gap-2 text-white px-8 py-3.5 md:py-4 rounded-full font-bold text-base md:text-lg shadow-lg ${isFinal ? "bg-purple-700 hover:bg-purple-800" : "bg-gray-800 hover:bg-gray-900"}`}>
+              <ImageIcon className="w-5 h-5 md:w-6 md:h-6" /> 이 화면을 이미지로 저장하기
+            </button>
+          </div>
+        )}
+      </>
+    );
+
+    content = (
+      <div className="min-h-screen bg-emerald-50 py-6 md:py-8 px-3 md:px-4 text-gray-800">
+        <div className="max-w-6xl mx-auto space-y-5">
+          {!capture && (
+            <div className="bg-white p-3 md:p-4 rounded-xl shadow-sm space-y-2">
+              <div className="flex justify-between items-center gap-2">
+                <div className="flex items-center gap-2 min-w-0">
+                  <div className={`p-2 rounded-lg ${isTeacher ? "bg-blue-100 text-blue-700" : "bg-emerald-100 text-emerald-700"}`}>{isTeacher ? <Users className="w-5 h-5" /> : <User className="w-5 h-5" />}</div>
+                  <span className="font-bold text-sm md:text-lg truncate">{isTeacher ? "김아름 선생님 모드" : studentLabel(myNo)}</span>
+                </div>
+                <div className="flex gap-3 items-center shrink-0">
+                  <button type="button" onClick={changePassword} className="flex items-center gap-1 text-xs md:text-sm font-semibold text-gray-500 hover:text-blue-600"><Lock className="w-4 h-4" /><span className="hidden md:inline">비밀번호 변경</span></button>
+                  <button type="button" onClick={() => logout()} className="flex items-center gap-1 text-gray-500 hover:text-red-500 font-semibold text-xs md:text-sm"><LogOut className="w-4 h-4" /> 로그아웃</button>
+                </div>
+              </div>
+              <div className="flex flex-wrap gap-1.5">
+                <Chip cls={connected ? "bg-emerald-100 text-emerald-700" : "bg-red-100 text-red-700"}>{connected ? "● 실시간 연결됨" : "○ 연결 끊김 · 연결되면 자동 저장"}</Chip>
+                <Chip cls={chipCls}>{chipText}</Chip>
+                {isTeacher && (selfTest
+                  ? <Chip cls={selfTest.ok ? "bg-blue-100 text-blue-700" : "bg-red-600 text-white"}
+                      onClick={() => notify(selfTest.ok ? "계산 검증 통과" : "계산 검증 실패", selfTest.ok ? `${selfTest.count.toLocaleString("ko-KR")}가지 경우를 대조해 모두 일치했습니다.` : selfTest.fails.slice(0, 20).join("\n"), selfTest.ok ? "success" : "error")}>
+                      {selfTest.ok ? `✓ 계산 검증 통과 (${selfTest.count.toLocaleString("ko-KR")}건)` : `✕ 계산 검증 실패 ${selfTest.fails.length}건`}
+                    </Chip>
+                  : <Chip cls="bg-gray-100 text-gray-500">계산 검증 중...</Chip>)}
+              </div>
+            </div>
+          )}
+
+          {isTeacher && !capture && (
+            <div className="flex gap-2 bg-white p-1.5 rounded-xl shadow-sm">
+              {[["student", "학생별 입력·분석", User], ["stats", "반 통계·그래프", BarChart]].map(([k, l, Ic]) => (
+                <button key={k} type="button" onClick={() => setTab(k)} className={`flex-1 py-2.5 rounded-lg font-bold text-sm flex items-center justify-center gap-1.5 ${tab === k ? "bg-emerald-600 text-white" : "text-gray-600 hover:bg-gray-50"}`}><Ic className="w-4 h-4" />{l}</button>
+              ))}
+            </div>
+          )}
+
+          {isTeacher && tab === "stats"
+            ? (loaded
+                ? <StatsView dataByNo={dataByNo} roster={roster} capture={capture} notify={notify}
+                    onPickStudent={(no, id) => { setSelectedNo(no); setExamId(id); setTab("student"); window.scrollTo(0, 0); }}
+                    onCapture={(lbl) => downloadImage("stats-area", `반통계_${lbl}.png`)} />
+                : <div className="py-16 flex flex-col items-center gap-2 text-emerald-600 font-bold"><Spinner />서버 연결을 기다리는 중...</div>)
+            : studentPanel}
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <>
+      {content}
+      <Modal key={modal ? modal.id : "none"} cfg={modal} onClose={(id) => setModal((m) => (m && m.id === id ? null : m))} />
+      {busy && <div className="fixed inset-0 bg-white/70 backdrop-blur-sm flex flex-col items-center justify-center z-[250] text-emerald-600"><Spinner className="w-12 h-12 mb-3" /><span className="text-xl font-bold text-emerald-800">{busy}</span></div>}
+    </>
+  );
+};
+
+ReactDOM.createRoot(document.getElementById("root")).render(<App />);
+</script>
 </body>
 </html>
