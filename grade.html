@@ -96,12 +96,11 @@ const EXAMS = [
   { id: "s1e2", label: "3학년 1학기 2차시험", short: "1학기 2차", sem: 1, kind: "e2" },
   { id: "s1f",  label: "3학년 1학기말 성적",  short: "1학기말",   sem: 1, kind: "final" },
   { id: "s2e1", label: "3학년 2학기 1차시험", short: "2학기 1차", sem: 2, kind: "e1" },
-  { id: "s2e2", label: "3학년 2학기 2차시험", short: "2학기 2차", sem: 2, kind: "e2" },
   { id: "s2f",  label: "3학년 2학기말 성적",  short: "2학기말",   sem: 2, kind: "final" },
 ];
 const examById = Object.fromEntries(EXAMS.map((e) => [e.id, e]));
 const examIdOf = (sem, kind) => `s${sem}${kind === "final" ? "f" : kind}`;
-const SEQ = { e: ["s1e1", "s1e2", "s2e1", "s2e2"], f: ["s1f", "s2f"] };   // 직전 비교 순서
+const SEQ = { e: ["s1e1", "s1e2", "s2e1"], f: ["s1f", "s2f"] };   // 직전 비교 순서
 
 // r1: 1차 반영비율(%), r2: 2차 반영비율(%), rp: 수행 만점(=반영비율)
 const SUBJECTS = {
@@ -113,10 +112,10 @@ const SUBJECTS = {
     { name: "미술", r1: 0,  r2: 0,  rp: 100 },
   ],
   2: [
-    { name: "국어", r1: 30, r2: 30, rp: 40 }, { name: "수학", r1: 30, r2: 30, rp: 40 },
-    { name: "영어", r1: 30, r2: 30, rp: 40 }, { name: "과학", r1: 30, r2: 30, rp: 40 },
-    { name: "사회", r1: 30, r2: 30, rp: 40 }, { name: "역사", r1: 30, r2: 30, rp: 40 },
-    { name: "도덕", r1: 30, r2: 30, rp: 40 }, { name: "체육", r1: 0,  r2: 0,  rp: 100 },
+    { name: "국어", r1: 50, r2: 0, rp: 50 }, { name: "수학", r1: 50, r2: 0, rp: 50 },
+    { name: "영어", r1: 0, r2: 0, rp: 100 }, { name: "과학", r1: 50, r2: 0, rp: 50 },
+    { name: "사회", r1: 70, r2: 0, rp: 30 }, { name: "역사", r1: 40, r2: 0, rp: 60 },
+    { name: "도덕", r1: 60, r2: 0, rp: 40 }, { name: "체육", r1: 0, r2: 0, rp: 100 },
     { name: "미술", r1: 0,  r2: 0,  rp: 100 },
   ],
 };
@@ -282,7 +281,7 @@ const runSelfTests = () => {
     [1, "역사", null, 100, 60, "100", 100, "A"],
     [1, "체육", null, null, 79.5, "79.5", 80, "A"],
     [1, "체육", null, null, 59.4, "59.4", 59, "C"],
-    [2, "사회", 77.7, 66.6, 33, "76.29", 76, "C"],
+    [2, "사회", 77.7, null, 30, "84.39", 84, "B"],
     [1, "국어", 0, 0, 0, "0", 0, "E"],
   ].forEach(([sem, name, e1, e2, perf, raw, pts, g], i) => {
     const sub = subOf(sem, name);
@@ -1487,7 +1486,7 @@ const App = () => {
               <button type="button" onClick={() => fileRef.current && fileRef.current.click()} className="flex items-center justify-center gap-2 bg-blue-600 text-white px-4 py-3 rounded-lg font-bold hover:bg-blue-700 shadow-md text-sm"><Upload className="w-5 h-5" /> [{exam.label}] 엑셀 올리기</button>
               <input type="file" accept=".xlsx,.xls,.csv" className="hidden" ref={fileRef} onChange={handleUpload} />
             </div>
-            <p className="text-xs text-blue-700 leading-relaxed">첫 열은 번호(또는 '1번 홍길동'), 학기말은 '국어_1차 / 국어_2차 / 국어_수행' 형식입니다. 저장 전에 확인 창이 뜹니다.</p>
+            <p className="text-xs text-blue-700 leading-relaxed">첫 열은 번호(또는 '1번 홍길동'), 학기말은 과목별 1차·수행 점수 형식입니다. 저장 전에 확인 창이 뜹니다.</p>
           </div>
         )}
 
@@ -1536,8 +1535,8 @@ const App = () => {
                         {isFinal ? (
                           <tr className="bg-purple-50 text-purple-800 border-b-2 border-purple-200 text-xs md:text-sm">
                             <th className="p-2 md:p-3 font-bold text-center">과목</th>
-                            <th className="p-2 md:p-3 font-bold text-center whitespace-nowrap"><span className="block text-[10px] font-normal text-purple-600">1차:2차:수행</span>반영비율</th>
-                            <th className="p-2 md:p-3 font-bold text-center"><span className="block text-[10px] font-normal text-purple-600">1차 / 2차 / 수행</span>점수</th>
+                            <th className="p-2 md:p-3 font-bold text-center whitespace-nowrap"><span className="block text-[10px] font-normal text-purple-600">{exam.sem === 2 ? "1차:수행" : "1차:2차:수행"}</span>반영비율</th>
+                            <th className="p-2 md:p-3 font-bold text-center"><span className="block text-[10px] font-normal text-purple-600">{exam.sem === 2 ? "1차 / 수행" : "1차 / 2차 / 수행"}</span>점수</th>
                             <th className="p-2 md:p-3 font-bold text-center bg-purple-100/50">환산총점</th>
                             <th className="p-2 md:p-3 font-bold text-center bg-purple-100/50">성취도</th>
                             {exam.id === "s2f" && <th className="p-2 md:p-3 font-bold text-center bg-purple-100/50">1학기 대비</th>}
@@ -1565,7 +1564,7 @@ const App = () => {
                   </div>
                   <div className="mt-2 text-[11px] md:text-xs text-gray-500 space-y-0.5">
                     {isFinal ? <>
-                      <p>※ 환산총점 = 1차×반영비율 + 2차×반영비율 + 수행. 소수 첫째 자리에서 반올림해 성취도를 정합니다. (괄호 안은 반올림 전)</p>
+                      <p>※ 환산총점 = 각 평가 점수×반영비율의 합. 소수 첫째 자리에서 반올림해 성취도를 정합니다. (괄호 안은 반올림 전)</p>
                       <p>※ 1·2차 점수는 시험 화면과 같은 데이터입니다. 어느 쪽에서 고쳐도 함께 바뀝니다.</p>
                     </> : <>
                       <p>※ 이 화면의 성취도는 이번 시험 점수만으로 본 참고용입니다. 실제 성취도는 학기말 환산총점으로 정해집니다.</p>
